@@ -142,15 +142,38 @@ RLS summary:
 - Required coverage: daily compounding math, fee calc with/without carryforward, month boundary, Monday rule, forecast, viewer-vs-admin isolation.
 - Frontend: no test framework yet; rely on TypeScript + manual QA.
 
-## Guardrails — ask before doing
+## Operating mode — autonomy vs. ask
 
-1. **Changing ports** (3007 / 8007) — always ask
-2. **Changing the fee or compounding math** — confirm the rule change first, show the math
-3. **Installing new dependencies** — list them first with a reason
-4. **Deleting DB data or migrations** — never without explicit "yes, delete"
-5. **Modifying `.env` files or committing secrets** — never commit `.env`, always `.env.example`
-6. **Force-pushing or rewriting git history** — never
-7. **Changing RLS policies or role-check logic** — flag every time; this is the security boundary
+**Default: proceed autonomously.** For pure execution — creating/editing files,
+running tests, installing deps that the current task obviously needs, running
+the dev server, lint, typecheck, committing finished work — do not pause for a
+"is this ok?" confirmation. The user will correct course if needed.
+
+**Still ask before:**
+
+1. **UI / UX choices** — colors, layouts, component library decisions, major
+   interaction patterns, page structure trade-offs.
+2. **Feature scope changes** — which endpoints to build, which fields to track,
+   what the workflow should be. When the business rules don't clearly cover
+   the situation, ask rather than guess.
+3. **Performance trade-offs with user-visible impact** — e.g. SSR vs CSR for a
+   specific page, caching strategy.
+4. **Cost-impacting changes** — adding new third-party services, upgrading
+   hosting tiers, enabling paid Supabase features.
+5. **Changing ports** (3007 / 8007) — always ask.
+6. **Changing the fee or compounding math** — confirm the rule change first,
+   show the math.
+7. **Changing RLS policies or role-check logic** — flag every time; this is
+   the security boundary.
+8. **Destructive operations on shared / production state** — deleting DB data
+   or migrations, force-pushing, rewriting git history, dropping tables.
+   Never without explicit "yes, delete."
+9. **Modifying `.env` files or committing secrets** — never commit `.env`,
+   always `.env.example`.
+
+**Cadence:** a one-line update when starting a multi-step batch; a concise
+summary of what changed + what's next when the batch finishes. Skip the
+running commentary in between.
 
 ## Git conventions
 
