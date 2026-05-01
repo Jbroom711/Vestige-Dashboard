@@ -137,3 +137,65 @@ class DashboardSummary(BaseModel):
     ytd_gain: Decimal
     avg_daily_gain_rate: Decimal
     projected_year_end_balance: Decimal
+
+
+# ---------------------------------------------------------------------------
+# /dashboard/snapshot — composite payload for the dashboard view
+# ---------------------------------------------------------------------------
+class DailyTile(BaseModel):
+    """Yesterday (or last trading day) summary."""
+    label: str                                # "Yesterday" or "Last trading day"
+    trading_date: date | None                 # None if no history yet
+    gross_pl: Decimal
+    gross_pct: Decimal
+    net_pl: Decimal                           # daily net = gross * 0.6 on wins, gross on losses
+    net_pct: Decimal
+    avg_gross_pct_to_date: Decimal | None     # null when fewer than 3 prior days
+    avg_net_pct_to_date: Decimal | None
+
+
+class MonthTile(BaseModel):
+    """Month-to-date aggregate using accrued fee with carryforward."""
+    year: int
+    month: int
+    gross_pl: Decimal
+    gross_pct: Decimal                        # vs balance at start of month
+    net_pl: Decimal                           # gross - accrued fee (with carryforward)
+    net_pct: Decimal
+
+
+class YearTile(BaseModel):
+    year: int
+    gross_pl: Decimal
+    gross_pct: Decimal                        # vs balance at start of year
+    net_pl: Decimal
+    net_pct: Decimal
+    projected_year_end_balance: Decimal
+    avg_daily_gain_rate: Decimal
+
+
+class DailyBarPoint(BaseModel):
+    """One bar in the month-of-day chart."""
+    date: date
+    gross_pl: Decimal
+    fee_portion: Decimal                      # gross - net (0 on losing days)
+    net_pl: Decimal
+
+
+class BalancePoint(BaseModel):
+    date: date
+    closing_balance: Decimal
+    deployed_capital: Decimal
+
+
+class DashboardSnapshot(BaseModel):
+    as_of: date
+    current_balance: Decimal
+    deployed_capital: Decimal
+    yesterday: DailyTile
+    month: MonthTile
+    year: YearTile
+    monthly_bars: list[DailyBarPoint]         # current-month days, oldest first
+    monthly_avg_gross_pl: Decimal             # for the bar-chart trendline ($ avg)
+    monthly_avg_net_pl: Decimal
+    balance_series: list[BalancePoint]        # all-time, oldest first
