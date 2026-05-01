@@ -78,3 +78,60 @@ export interface DashboardSummary {
   avgDailyGainRate: PctStr;
   projectedYearEndBalance: MoneyStr;
 }
+
+// ---------- /dashboard/snapshot composite payload ------------------------
+export interface DailyTile {
+  label: "Today" | "Yesterday" | "Last trading day";
+  tradingDate: string | null;
+  grossPl: MoneyStr;
+  grossPct: PctStr;
+  netPl: MoneyStr;
+  netPct: PctStr;
+  avgGrossPctToDate: PctStr | null;
+  avgNetPctToDate: PctStr | null;
+}
+
+export interface MonthTile {
+  year: number;
+  month: number;
+  grossPl: MoneyStr;
+  grossPct: PctStr;
+  netPl: MoneyStr;
+  netPct: PctStr;
+}
+
+export interface YearTile {
+  year: number;
+  grossPl: MoneyStr;
+  grossPct: PctStr;
+  netPl: MoneyStr;
+  netPct: PctStr;
+  projectedYearEndBalance: MoneyStr;
+  avgDailyGainRate: PctStr;
+}
+
+export interface DailyBarPoint {
+  date: string;
+  grossPl: MoneyStr;
+  feePortion: MoneyStr;
+  netPl: MoneyStr;
+}
+
+export interface BalancePoint {
+  date: string;
+  closingBalance: MoneyStr;
+  deployedCapital: MoneyStr;
+}
+
+export interface DashboardSnapshot {
+  asOf: string;
+  currentBalance: MoneyStr;
+  deployedCapital: MoneyStr;
+  yesterday: DailyTile;
+  month: MonthTile;
+  year: YearTile;
+  monthlyBars: DailyBarPoint[];
+  monthlyAvgGrossPl: MoneyStr;
+  monthlyAvgNetPl: MoneyStr;
+  balanceSeries: BalancePoint[];
+}

@@ -40,3 +40,32 @@ export function formatShortDate(iso: string): string {
     day: "numeric",
   }).format(new Date(y, m - 1, d));
 }
+
+export function formatSignedMoney(value: string | number, currency = "USD"): string {
+  const n = typeof value === "string" ? Number(value) : value;
+  const sign = n > 0 ? "+" : "";
+  return sign + formatMoney(n, currency);
+}
+
+export function formatSignedPercent(value: string | number, digits = 2): string {
+  const n = typeof value === "string" ? Number(value) : value;
+  const sign = n > 0 ? "+" : "";
+  return sign + formatPercent(n, digits);
+}
+
+/** Percentage points (one percentage minus another), e.g. "+0.42pp". */
+export function formatPercentagePoints(value: string | number, digits = 2): string {
+  const n = typeof value === "string" ? Number(value) : value;
+  const pp = n * 100;
+  const sign = pp > 0 ? "+" : "";
+  return `${sign}${pp.toFixed(digits)}pp`;
+}
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+export function monthName(month: number): string {
+  return MONTH_NAMES[month - 1] ?? String(month);
+}
