@@ -108,11 +108,13 @@ def evolve_balance(
     capital_changes: list[CapitalChange],
     fees_by_date: dict[date, Decimal] | None = None,
 ) -> list[DayState]:
-    """Walk trading days forward, applying the shared daily % to the user's
-    prior balance, then net capital, then any scheduled fee deduction.
-
-    Only daily_returns with date >= start_date are applied. This lets viewers
-    who join mid-stream start fresh from their own principal on join_date.
+    """Walk forward through every date with a return, capital change, or fee
+    deduction; for each, apply the shared daily % to the prior balance, then
+    add the net capital, then subtract any fee. Dates appearing only in
+    capital_changes or fees still produce a state (gross_pl will be 0 for
+    that day). Events strictly before `start_date` are ignored — this lets
+    viewers who join mid-stream start fresh from their own principal on
+    `join_date`.
     """
     fees_by_date = fees_by_date or {}
 
@@ -120,19 +122,25 @@ def evolve_balance(
     for c in capital_changes:
         cap_by_date[c.date] = cap_by_date.get(c.date, Decimal("0")) + c.signed_amount
 
+    returns_by_date: dict[date, Decimal] = {dr.date: dr.gross_pl_pct for dr in daily_returns}
+
+    active_dates = sorted(
+        d for d in set(returns_by_date) | set(cap_by_date) | set(fees_by_date)
+        if d >= start_date
+    )
+
     states: list[DayState] = []
     balance = starting_balance
-    for dr in sorted(daily_returns, key=lambda x: x.date):
-        if dr.date < start_date:
-            continue
+    for d in active_dates:
         prior = balance
-        gross = prior * dr.gross_pl_pct
-        cap = cap_by_date.get(dr.date, Decimal("0"))
-        fee = fees_by_date.get(dr.date, Decimal("0"))
+        gross_pct = returns_by_date.get(d, Decimal("0"))
+        gross = prior * gross_pct
+        cap = cap_by_date.get(d, Decimal("0"))
+        fee = fees_by_date.get(d, Decimal("0"))
         closing = prior + gross + cap - fee
         states.append(
             DayState(
-                date=dr.date,
+                date=d,
                 prior_balance=_qmoney(prior),
                 gross_pl=_qmoney(gross),
                 capital_net=_qmoney(cap),

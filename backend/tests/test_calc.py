@@ -83,6 +83,24 @@ def test_evolve_balance_applies_capital_changes_on_day():
     assert states[0].closing_balance == D("111000.00")
 
 
+def test_evolve_balance_applies_capital_on_day_without_a_return():
+    # Deposit on 1/13 (Mon) with no return that day; first return is 1/15.
+    # Balance should reach 1/15 reflecting the deposit, not skip it.
+    returns = [DailyReturn(date(2024, 1, 15), D("0.01"))]
+    capital = [CapitalChange(date(2024, 1, 13), D("5000"), "addition")]
+    # Wait — 1/13/2024 is a Saturday; calc doesn't know about that and shouldn't
+    # care, since it just consumes whatever event dates the caller supplies.
+    states = evolve_balance(D("100000"), date(2024, 1, 1), returns, capital)
+    assert len(states) == 2  # one state per active date
+    assert states[0].date == date(2024, 1, 13)
+    assert states[0].gross_pl == D("0.00")
+    assert states[0].capital_net == D("5000.00")
+    assert states[0].closing_balance == D("105000.00")
+    assert states[1].date == date(2024, 1, 15)
+    # 105,000 * 1.01 = 106,050
+    assert states[1].closing_balance == D("106050.00")
+
+
 def test_evolve_balance_deducts_fee_on_day():
     returns = [DailyReturn(date(2024, 2, 1), D("0.00"))]  # flat day, fee gets deducted
     fees = {date(2024, 2, 1): D("400")}
