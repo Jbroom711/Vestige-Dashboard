@@ -259,30 +259,45 @@ def snapshot(
     ytd_states = [s for s in states if s.date >= year_start]
     ytd_gross = sum((s.gross_pl for s in ytd_states), ZERO)
 
-    pre_year_results = compute_monthly_fees(states_before_year, commission_rate)
-    cf_at_year_start = (
-        pre_year_results[-1].carryforward_remaining if pre_year_results else ZERO
-    )
-    cf = cf_at_year_start
+    # Effective fees for closed months come from the monthly_fees table —
+    # manual override wins, falling back to the auto value. This honors any
+    # out-of-band fees the user knows about (e.g., the broker lumped two
+    # months together) instead of re-deriving from the gross.
+    fee_rows = (
+        service_client()
+        .table("monthly_fees")
+        .select("year, month, auto_amount, manual_amount")
+        .eq("user_id", user.id)
+        .execute()
+    ).data or []
+    effective_fee_by_ym: dict[tuple[int, int], Decimal] = {}
+    for r in fee_rows:
+        eff = (
+            Decimal(str(r["manual_amount"]))
+            if r["manual_amount"] is not None
+            else Decimal(str(r["auto_amount"]))
+        )
+        effective_fee_by_ym[(r["year"], r["month"])] = eff
+
     ytd_total_fee = ZERO
     months_in_ytd = sorted({(s.date.year, s.date.month) for s in ytd_states})
+    current_ym = (as_of.year, as_of.month)
     for ym in months_in_ytd:
-        month_states = [s for s in ytd_states if (s.date.year, s.date.month) == ym]
-        month_gross = sum((s.gross_pl for s in month_states), ZERO)
-        is_current_month = ym == (as_of.year, as_of.month)
-        if month_gross >= 0:
-            offset = min(cf, month_gross)
-            taxable = month_gross - offset
-            fee = taxable * commission_rate
-            ytd_total_fee += fee
-            if not is_current_month:
-                # Closed month — actually consume the carryforward.
-                cf -= offset
+        if ym == current_ym:
+            # Current month — use the running accrual computed for MTD.
+            ytd_total_fee += accrued_fee
+        elif ym in effective_fee_by_ym:
+            # Closed month with a stored fee row — use the effective value.
+            ytd_total_fee += effective_fee_by_ym[ym]
         else:
-            # Loss month — adds to carryforward (but only if the month is
-            # closed; for the current month we wait until month-end).
-            if not is_current_month:
-                cf += -month_gross
+            # Closed month with no row yet — fall back to a simple calc on
+            # the month's gross (carryforward not modeled here; once
+            # /fees/recompute is run, the row will exist with the proper
+            # value and this branch becomes unreachable).
+            month_states = [s for s in ytd_states if (s.date.year, s.date.month) == ym]
+            month_gross = sum((s.gross_pl for s in month_states), ZERO)
+            if month_gross > 0:
+                ytd_total_fee += month_gross * commission_rate
     ytd_net = ytd_gross - ytd_total_fee
 
     balance_at_year_start = (
