@@ -10,7 +10,7 @@ All money values use Decimal. Percentages are stored as Decimal fractions
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
@@ -221,45 +221,99 @@ class ForecastResult:
 def forecast_year_end(
     day_states: list[DayState],
     as_of: date,
+    commission_rate: Decimal,
+    rate_override: Decimal | None = None,
 ) -> ForecastResult:
-    """Project year-end balance by compounding the historical avg daily gain
-    rate across remaining trading days of the current year.
+    """Project year-end balance using the monthly-fee model.
 
-    avg rate is computed from gross_pl / prior_balance per day (so it's
-    independent of the size of the book). If there are no observations or
-    no remaining trading days, returns zeros.
+    Mechanic mirrors how the broker actually charges: within each month
+    the gross gains compound at the daily rate; at month-end,
+    `commission_rate` × that month's gross gain is deducted as the fee
+    pulled at the start of the next month.
+
+    `rate` is the geometric mean of historical daily gross %s (so it's
+    consistent with compounding) unless `rate_override` is supplied for
+    "what-if" projections. Active-rate adjustment scales the remaining
+    NYSE trading-day count by the user's demonstrated trading frequency,
+    so a user who skips 1 day in 30 won't be projected as if they trade
+    every NYSE session.
     """
+    current_balance = (
+        max(day_states, key=lambda s: s.date).closing_balance if day_states else Decimal("0")
+    )
+
+    # Pick the daily rate
+    if rate_override is not None:
+        rate = rate_override
+    else:
+        gross_rates: list[Decimal] = [
+            s.gross_pl / s.prior_balance
+            for s in day_states
+            if s.prior_balance > 0 and s.gross_pl != 0
+        ]
+        if not gross_rates:
+            return ForecastResult(
+                avg_daily_gain_rate=Decimal("0"),
+                remaining_trading_days=0,
+                projected_closing_balance=current_balance,
+                projected_gain=Decimal("0"),
+            )
+        f = Decimal("1")
+        for r in gross_rates:
+            f *= (Decimal("1") + r)
+        rate = f ** (Decimal("1") / Decimal(len(gross_rates))) - Decimal("1")
+
     if not day_states:
         return ForecastResult(
-            avg_daily_gain_rate=Decimal("0"),
+            avg_daily_gain_rate=_qpct(rate),
             remaining_trading_days=0,
-            projected_closing_balance=Decimal("0"),
+            projected_closing_balance=current_balance,
             projected_gain=Decimal("0"),
         )
 
-    rates: list[Decimal] = []
-    for s in day_states:
-        if s.prior_balance > 0:
-            rates.append(s.gross_pl / s.prior_balance)
-    avg = sum(rates, Decimal("0")) / Decimal(len(rates)) if rates else Decimal("0")
+    # Active rate: how often the user actually trades on NYSE sessions
+    first_date = min(s.date for s in day_states)
+    historical_nyse = len(trading_days_between(first_date, as_of))
+    active_count = sum(1 for s in day_states if s.gross_pl != 0)
+    if historical_nyse > 0:
+        active_rate = Decimal(active_count) / Decimal(historical_nyse)
+    else:
+        active_rate = Decimal("1")
 
-    last_entry_date = max(s.date for s in day_states)
-    year_end = date(as_of.year, 12, 31)
-    remaining_days = len(
-        trading_days_between(max(last_entry_date, as_of), year_end)
-    )
-    # exclude the starting anchor day itself
-    if remaining_days > 0:
-        remaining_days -= 1
+    # Walk forward by month
+    bal = current_balance
+    total_active_days = 0
+    cur_y, cur_m = as_of.year, as_of.month
+    while cur_y == as_of.year:
+        if cur_m == 12:
+            month_end = date(cur_y, 12, 31)
+            next_y, next_m = cur_y + 1, 1
+        else:
+            month_end = date(cur_y, cur_m + 1, 1) - timedelta(days=1)
+            next_y, next_m = cur_y, cur_m + 1
+        month_start = max(as_of, date(cur_y, cur_m, 1))
 
-    current_balance = max(day_states, key=lambda s: s.date).closing_balance
-    projected = current_balance * (Decimal("1") + avg) ** remaining_days
+        nyse_days = len(trading_days_between(month_start, month_end))
+        active_days = max(0, round(nyse_days * float(active_rate)))
+
+        if active_days > 0:
+            month_factor = (Decimal("1") + rate) ** Decimal(active_days)
+            if rate >= 0:
+                # Gross compounds intra-month; commission deducted at month-end
+                net_factor = (Decimal("1") - commission_rate) * month_factor + commission_rate
+            else:
+                # Losing months don't trigger a fee
+                net_factor = month_factor
+            bal *= net_factor
+            total_active_days += active_days
+
+        cur_y, cur_m = next_y, next_m
 
     return ForecastResult(
-        avg_daily_gain_rate=_qpct(avg),
-        remaining_trading_days=remaining_days,
-        projected_closing_balance=_qmoney(projected),
-        projected_gain=_qmoney(projected - current_balance),
+        avg_daily_gain_rate=_qpct(rate),
+        remaining_trading_days=total_active_days,
+        projected_closing_balance=_qmoney(bal),
+        projected_gain=_qmoney(bal - current_balance),
     )
 
 

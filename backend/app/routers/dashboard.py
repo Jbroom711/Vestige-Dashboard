@@ -129,7 +129,7 @@ def summary(
     )
     ytd_gain = current_balance - balance_at_year_start
 
-    forecast = forecast_year_end(states, as_of)
+    forecast = forecast_year_end(states, as_of, commission_rate)
 
     return DashboardSummary(
         as_of=as_of,
@@ -303,7 +303,7 @@ def snapshot(
     balance_at_year_start = (
         states_before_year[-1].closing_balance if states_before_year else starting
     )
-    forecast = forecast_year_end(states, as_of)
+    forecast = forecast_year_end(states, as_of, commission_rate)
     year_tile = YearTile(
         year=as_of.year,
         gross_pl=ytd_gross,

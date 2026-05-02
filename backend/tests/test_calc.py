@@ -202,18 +202,45 @@ def test_deployed_capital_sums_signed_changes():
 # forecast_year_end
 # ---------------------------------------------------------------------------
 def test_forecast_with_positive_history():
+    # 2 winning days at +1% each → geo mean is exactly 1%
     returns = [
         DailyReturn(date(2024, 1, 2), D("0.01")),
         DailyReturn(date(2024, 1, 3), D("0.01")),
     ]
     states = evolve_balance(D("100000"), date(2024, 1, 2), returns, [])
-    result = forecast_year_end(states, as_of=date(2024, 1, 3))
+    result = forecast_year_end(states, as_of=date(2024, 1, 3), commission_rate=D("0.40"))
     assert result.avg_daily_gain_rate == D("0.010000")
     assert result.remaining_trading_days > 0
+    # Monthly-fee model: balance grows but 40% of each month's gross is pulled.
     assert result.projected_closing_balance > states[-1].closing_balance
 
 
 def test_forecast_with_no_history_returns_zeros():
-    result = forecast_year_end([], as_of=date(2024, 6, 15))
+    result = forecast_year_end([], as_of=date(2024, 6, 15), commission_rate=D("0.40"))
     assert result.projected_closing_balance == D("0")
     assert result.remaining_trading_days == 0
+
+
+def test_forecast_with_rate_override_and_no_states_uses_starting_balance_only():
+    # No history but explicit rate override — should still return current balance.
+    # When there are no day_states, current_balance defaults to 0; but the override
+    # path still computes a rate so future runs (with states) project from there.
+    result = forecast_year_end(
+        [], as_of=date(2024, 6, 15),
+        commission_rate=D("0.40"),
+        rate_override=D("0.0025"),
+    )
+    assert result.avg_daily_gain_rate == D("0.002500")
+    assert result.projected_closing_balance == D("0")  # no balance to compound
+
+
+def test_forecast_monthly_fee_deduction_lowers_balance_vs_pure_compounding():
+    # 1 winning day per month at +5%, 1-month projection window
+    returns = [DailyReturn(date(2024, 11, 15), D("0.05"))]
+    states = evolve_balance(D("100000"), date(2024, 11, 15), returns, [])
+    result = forecast_year_end(states, as_of=date(2024, 12, 1), commission_rate=D("0.40"))
+    # Pure-gross compounding for one month at 5%/day for ~21 days would balloon
+    # the balance massively; the monthly fee deduction must reduce that. We just
+    # assert the projection is less than the same gross factor without the fee.
+    pure_gross = states[-1].closing_balance * (D("1.05") ** D("21"))
+    assert result.projected_closing_balance < pure_gross
