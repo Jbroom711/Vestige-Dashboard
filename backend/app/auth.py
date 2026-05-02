@@ -6,10 +6,12 @@ routes additionally depend on `require_admin`.
 
 from __future__ import annotations
 
+import ssl
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated
 
+import certifi
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -41,9 +43,18 @@ class CurrentUser:
 
 @lru_cache
 def _jwks_client() -> PyJWKClient:
-    """Cached JWKS fetcher for verifying asymmetric Supabase tokens."""
+    """Cached JWKS fetcher for verifying asymmetric Supabase tokens.
+
+    macOS Python distributions don't ship a CA bundle that urllib uses by
+    default, so SSL verification fails. We pass an explicit SSL context
+    backed by certifi's bundled CA list.
+    """
     settings = get_settings()
-    return PyJWKClient(f"{settings.supabase_url}/auth/v1/.well-known/jwks.json")
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    return PyJWKClient(
+        f"{settings.supabase_url}/auth/v1/.well-known/jwks.json",
+        ssl_context=ssl_context,
+    )
 
 
 def _decode_token(token: str) -> dict:
