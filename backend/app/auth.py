@@ -7,11 +7,13 @@ routes additionally depend on `require_admin`.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient
 
 from app.config import get_settings
 from app.db import service_client
@@ -36,14 +38,50 @@ class CurrentUser:
         return self.status == "approved"
 
 
-def _decode_token(token: str) -> dict:
+@lru_cache
+def _jwks_client() -> PyJWKClient:
+    """Cached JWKS fetcher for verifying asymmetric Supabase tokens."""
     settings = get_settings()
+    return PyJWKClient(f"{settings.supabase_url}/auth/v1/.well-known/jwks.json")
+
+
+def _decode_token(token: str) -> dict:
+    """Verify a Supabase access token.
+
+    Supabase projects can issue tokens signed either with the legacy shared
+    HS256 secret or with newer asymmetric keys (ES256 / RS256). We honor both
+    by inspecting the token header and dispatching to the matching key.
+    """
+    settings = get_settings()
+
     try:
-        return jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
+        header = jwt.get_unverified_header(token)
+    except jwt.DecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token format: {e}",
+        ) from e
+
+    alg = header.get("alg", "")
+    try:
+        if alg == "HS256":
+            return jwt.decode(
+                token,
+                settings.supabase_jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+        if alg in ("ES256", "RS256"):
+            signing_key = _jwks_client().get_signing_key_from_jwt(token)
+            return jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=[alg],
+                audience="authenticated",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Unsupported token alg: {alg}",
         )
     except jwt.InvalidTokenError as e:
         raise HTTPException(
