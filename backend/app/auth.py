@@ -14,6 +14,7 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientError
 
 from app.config import get_settings
 from app.db import service_client
@@ -72,7 +73,13 @@ def _decode_token(token: str) -> dict:
                 audience="authenticated",
             )
         if alg in ("ES256", "RS256"):
-            signing_key = _jwks_client().get_signing_key_from_jwt(token)
+            try:
+                signing_key = _jwks_client().get_signing_key_from_jwt(token)
+            except PyJWKClientError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=f"Could not resolve signing key from JWKS: {e}",
+                ) from e
             return jwt.decode(
                 token,
                 signing_key.key,
