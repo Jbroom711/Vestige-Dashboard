@@ -105,8 +105,15 @@ def recompute_fees(
     if not results:
         return {"computed": 0, "carryforward_remaining": "0"}
 
+    today = date.today()
+    current_ym = (today.year, today.month)
     sb = service_client()
+    written = 0
     for r in results:
+        if (r.year, r.month) == current_ym:
+            # Current month is still accruing — don't materialize a fee row yet.
+            # The dashboard's mtd_accrued_fee shows the running estimate.
+            continue
         payload = {
             "user_id": user.id,
             "year": r.year,
@@ -117,8 +124,15 @@ def recompute_fees(
             "carryforward_remaining": str(r.carryforward_remaining),
         }
         sb.table("monthly_fees").upsert(payload, on_conflict="user_id,year,month").execute()
+        written += 1
+
+    # If a stale current-month row exists (e.g. from a prior recompute that
+    # ran in a different month), clean it up so we don't double-deduct later.
+    sb.table("monthly_fees").delete().eq("user_id", user.id).eq(
+        "year", today.year
+    ).eq("month", today.month).execute()
 
     return {
-        "computed": len(results),
+        "computed": written,
         "carryforward_remaining": str(results[-1].carryforward_remaining),
     }

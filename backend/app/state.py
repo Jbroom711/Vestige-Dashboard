@@ -33,6 +33,20 @@ def _load_profile(user_id: str) -> tuple[Decimal, date]:
     return Decimal(str(p["starting_balance"])), date.fromisoformat(p["join_date"])
 
 
+def evolve_user_balance_with_inputs(
+    starting: Decimal,
+    join_date: date,
+    user_id: str,
+    until_exclusive: date | None = None,
+) -> list[DayState]:
+    """Variant of evolve_user_balance that takes already-fetched profile data,
+    so callers that have the profile in hand avoid a redundant query."""
+    returns = _load_returns(until_exclusive)
+    capital = _load_capital(user_id, until_exclusive)
+    fees = _load_effective_fees(user_id, until_exclusive)
+    return evolve_balance(starting, join_date, returns, capital, fees)
+
+
 def _load_returns(until_exclusive: date | None) -> list[DailyReturn]:
     q = service_client().table("daily_returns").select("date, gross_pl_pct").order("date")
     if until_exclusive is not None:

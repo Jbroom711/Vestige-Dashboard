@@ -27,7 +27,7 @@ from app.schemas import (
     MonthTile,
     YearTile,
 )
-from app.state import evolve_user_balance
+from app.state import evolve_user_balance, evolve_user_balance_with_inputs
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -84,7 +84,7 @@ def summary(
 ) -> DashboardSummary:
     as_of = as_of or date.today()
     starting, join_date, commission_rate = _load_profile_essentials(user.id)
-    states = evolve_user_balance(user.id)
+    states = evolve_user_balance_with_inputs(starting, join_date, user.id)
 
     if not states:
         return DashboardSummary(
@@ -153,7 +153,7 @@ def snapshot(
     YTD tile, daily bar chart points, balance-over-time series."""
     as_of = as_of or date.today()
     starting, join_date, commission_rate = _load_profile_essentials(user.id)
-    states = evolve_user_balance(user.id)
+    states = evolve_user_balance_with_inputs(starting, join_date, user.id)
 
     def daily_net(gross: Decimal) -> Decimal:
         # Per-day rule: keep 60% on winners, eat the full loss on losers.
