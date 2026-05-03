@@ -37,7 +37,7 @@ export default async function DashboardPage() {
       </header>
 
       <Section title="Daily" subtitle={snapshot.yesterday.label}>
-        <YesterdayTile data={snapshot.yesterday} />
+        <YesterdayTile data={snapshot.yesterday} avgGross={snapshot.allTimeAvgGrossPl} />
       </Section>
 
       <Section

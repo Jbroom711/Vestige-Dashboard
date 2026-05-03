@@ -133,5 +133,7 @@ export interface DashboardSnapshot {
   monthlyBars: DailyBarPoint[];
   monthlyAvgGrossPl: MoneyStr;
   monthlyAvgNetPl: MoneyStr;
+  allTimeAvgGrossPl: MoneyStr;
+  allTimeAvgNetPl: MoneyStr;
   balanceSeries: BalancePoint[];
 }

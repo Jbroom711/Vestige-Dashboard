@@ -185,6 +185,8 @@ def snapshot(
             monthly_bars=[],
             monthly_avg_gross_pl=ZERO,
             monthly_avg_net_pl=ZERO,
+            all_time_avg_gross_pl=ZERO,
+            all_time_avg_net_pl=ZERO,
             balance_series=[],
         )
 
@@ -336,6 +338,20 @@ def snapshot(
         avg_gross_pl_dollar = ZERO
         avg_net_pl_dollar = ZERO
 
+    # All-time averages over active trading days (matches the platform's
+    # "Avg profit per day" stat).
+    trading_states = [s for s in states if s.gross_pl != 0]
+    if trading_states:
+        all_time_avg_gross = sum((s.gross_pl for s in trading_states), ZERO) / Decimal(
+            len(trading_states)
+        )
+        all_time_avg_net = sum((daily_net(s.gross_pl) for s in trading_states), ZERO) / Decimal(
+            len(trading_states)
+        )
+    else:
+        all_time_avg_gross = ZERO
+        all_time_avg_net = ZERO
+
     # ---- balance series --------------------------------------------------
     balance_series: list[BalancePoint] = []
     sorted_caps = sorted(cap_changes, key=lambda c: c.date)
@@ -363,6 +379,8 @@ def snapshot(
         monthly_bars=monthly_bars,
         monthly_avg_gross_pl=avg_gross_pl_dollar,
         monthly_avg_net_pl=avg_net_pl_dollar,
+        all_time_avg_gross_pl=all_time_avg_gross,
+        all_time_avg_net_pl=all_time_avg_net,
         balance_series=balance_series,
     )
 

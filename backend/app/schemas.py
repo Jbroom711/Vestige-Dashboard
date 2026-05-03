@@ -198,4 +198,6 @@ class DashboardSnapshot(BaseModel):
     monthly_bars: list[DailyBarPoint]         # current-month days, oldest first
     monthly_avg_gross_pl: Decimal             # for the bar-chart trendline ($ avg)
     monthly_avg_net_pl: Decimal
+    all_time_avg_gross_pl: Decimal            # for the daily-tile reference line
+    all_time_avg_net_pl: Decimal
     balance_series: list[BalancePoint]        # all-time, oldest first
