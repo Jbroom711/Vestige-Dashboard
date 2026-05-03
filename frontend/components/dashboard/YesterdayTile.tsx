@@ -1,5 +1,40 @@
-import { formatDate, formatSignedMoney } from "@/lib/format";
+import { formatDate, formatSignedMoney, formatSignedPercent } from "@/lib/format";
 import type { DailyTile } from "@/lib/types";
+
+const TRADING_DAYS_PER_YEAR = 252;
+
+/** (1 + dailyRate)^252 − 1, matching the user's sheet "Annualized (Full year)" column. */
+function annualize(dailyRate: number): number {
+  return Math.pow(1 + dailyRate, TRADING_DAYS_PER_YEAR) - 1;
+}
+
+/**
+ * One block of right-side labels that sits next to a bar segment. The flex
+ * weight matches the segment's height so the dollar value inside the bar
+ * lines up with the daily % on the right.
+ */
+function RatePair({ flex, pct }: { flex: number; pct: number }) {
+  const annual = annualize(pct);
+  const tone =
+    pct > 0
+      ? "text-emerald-700 dark:text-emerald-400"
+      : pct < 0
+        ? "text-red-700 dark:text-red-400"
+        : "text-zinc-600 dark:text-zinc-300";
+  return (
+    <div
+      className="flex flex-col items-start justify-center"
+      style={{ flex }}
+    >
+      <span className={`text-base font-semibold tabular-nums ${tone}`}>
+        {formatSignedPercent(pct, 3)}
+      </span>
+      <span className="text-xs tabular-nums text-zinc-500">
+        ({formatSignedPercent(annual, 1)} annual)
+      </span>
+    </div>
+  );
+}
 
 /**
  * Daily section: a single vertical stacked bar for the most recent trading
@@ -31,11 +66,11 @@ export default function YesterdayTile({ data }: { data: DailyTile }) {
         <span className="text-zinc-700 dark:text-zinc-300">{formatDate(data.tradingDate)}</span>
       </p>
 
-      <div className="flex items-center justify-center">
+      <div className="flex items-stretch justify-center gap-5">
+        {/* The stacked bar */}
         <div className="flex h-72 w-40 flex-col overflow-hidden rounded-lg shadow-inner">
           {positive ? (
             <>
-              {/* Top 40% — fee portion, lighter green, black text shows total gross */}
               <div className="flex flex-[2] flex-col items-center justify-center bg-emerald-300 dark:bg-emerald-400">
                 <span className="text-[11px] font-medium uppercase tracking-wide text-black/60">
                   Gross
@@ -44,7 +79,6 @@ export default function YesterdayTile({ data }: { data: DailyTile }) {
                   {formatSignedMoney(gross)}
                 </span>
               </div>
-              {/* Bottom 60% — net, dark green, white text */}
               <div className="flex flex-[3] flex-col items-center justify-center bg-emerald-700 dark:bg-emerald-600">
                 <span className="text-[11px] font-medium uppercase tracking-wide text-white/80">
                   Net
@@ -72,6 +106,22 @@ export default function YesterdayTile({ data }: { data: DailyTile }) {
                 $0
               </span>
             </div>
+          )}
+        </div>
+
+        {/* Right-side labels: daily % and annualized %, matching segment heights */}
+        <div className="flex h-72 w-44 flex-col">
+          {positive ? (
+            <>
+              {/* Aligned with top (gross) segment */}
+              <RatePair flex={2} pct={Number(data.grossPct)} />
+              {/* Aligned with bottom (net) segment */}
+              <RatePair flex={3} pct={Number(data.netPct)} />
+            </>
+          ) : negative ? (
+            <RatePair flex={1} pct={Number(data.grossPct)} />
+          ) : (
+            <div className="flex flex-1 items-center justify-start text-xs text-zinc-400">—</div>
           )}
         </div>
       </div>
