@@ -150,17 +150,15 @@ function AvgLine({
         className="pointer-events-none absolute left-0 w-full border-t-2 border-dashed border-zinc-500 dark:border-zinc-400"
         style={{ bottom: linePxFromBottom }}
       />
-      {/* Floating "avg $X" label at the right end of the line */}
+      {/* "avg $X" label sits OUTSIDE the bar, just to the right of where the
+          dashed line ends. left-full anchors it to the bar's right edge so it
+          renders in the gap between the bar and the right-side labels column. */}
       <div
-        className="pointer-events-none absolute right-0 whitespace-nowrap rounded bg-white px-1 text-[11px] font-medium text-zinc-600 shadow-sm dark:bg-zinc-900 dark:text-zinc-300"
-        style={{
-          bottom: linePxFromBottom + 2,
-          // If the line is above the bar, anchor the label slightly off-axis
-          // so it stays readable; otherwise snap it neatly atop the line.
-          transform: isAboveBar ? "translateY(0)" : "translateY(0)",
-        }}
+        className="pointer-events-none absolute left-full ml-2 -translate-y-1/2 whitespace-nowrap text-[11px] font-medium text-zinc-500 dark:text-zinc-400"
+        style={{ bottom: linePxFromBottom }}
       >
         avg {formatMoney(avgGross)}
+        {isAboveBar ? " (today below avg)" : ""}
       </div>
     </>
   );
