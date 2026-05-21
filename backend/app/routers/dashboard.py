@@ -175,14 +175,16 @@ def snapshot(
             month=MonthTile(
                 year=as_of.year, month=as_of.month,
                 gross_pl=ZERO, gross_pct=ZERO, net_pl=ZERO, net_pct=ZERO,
-                avg_daily_gain_rate=ZERO, remaining_trading_days=0,
+                avg_daily_gross_rate=ZERO, avg_daily_net_rate=ZERO,
+                remaining_trading_days=0, total_trading_days=0,
                 projected_gross_pl=ZERO, projected_net_pl=ZERO,
                 projected_gross_pct=ZERO, projected_net_pct=ZERO,
             ),
             year=YearTile(
                 year=as_of.year,
                 gross_pl=ZERO, gross_pct=ZERO, net_pl=ZERO, net_pct=ZERO,
-                avg_daily_gain_rate=ZERO, remaining_trading_days=0,
+                avg_daily_gross_rate=ZERO, avg_daily_net_rate=ZERO,
+                remaining_trading_days=0, total_trading_days=0,
                 projected_gross_pl=ZERO, projected_net_pl=ZERO,
                 projected_gross_pct=ZERO, projected_net_pct=ZERO,
                 projected_year_end_balance=starting,
@@ -252,35 +254,36 @@ def snapshot(
         states_before_month[-1].closing_balance if states_before_month else starting
     )
 
-    # ---- Month projection: geo mean MTD daily % compounded for the rest of
-    # this month, then 40% fee applied to the full month's gross.
+    # ---- Month projection ----
+    # Geo-mean MTD daily gross and net rates (used for the SIMPLE bar %).
     mtd_active = [s for s in mtd_states if s.prior_balance > 0 and s.gross_pl != 0]
     if mtd_active:
-        f = Decimal("1")
+        fg = Decimal("1")
+        fn = Decimal("1")
         for s in mtd_active:
-            f *= (Decimal("1") + s.gross_pl / s.prior_balance)
-        month_avg_pct = f ** (Decimal("1") / Decimal(len(mtd_active))) - Decimal("1")
+            fg *= (Decimal("1") + s.gross_pl / s.prior_balance)
+            fn *= (Decimal("1") + daily_net(s.gross_pl) / s.prior_balance)
+        n = Decimal(len(mtd_active))
+        month_avg_gross_rate = fg ** (Decimal("1") / n) - Decimal("1")
+        month_avg_net_rate = fn ** (Decimal("1") / n) - Decimal("1")
     else:
-        month_avg_pct = ZERO
+        month_avg_gross_rate = ZERO
+        month_avg_net_rate = ZERO
 
-    # active rate from full history (same as forecast_year_end uses)
-    first_state_date = min(s.date for s in states)
-    hist_nyse = len(trading_days_between(first_state_date, as_of))
-    active_count = sum(1 for s in states if s.gross_pl != 0)
-    active_rate = Decimal(active_count) / Decimal(hist_nyse) if hist_nyse > 0 else Decimal("1")
-
-    # remaining trading days in this month
+    # Trading-day counts (NYSE, no active-rate adjustment now).
     if as_of.month == 12:
         month_last_day = date(as_of.year, 12, 31)
     else:
         month_last_day = date(as_of.year, as_of.month + 1, 1) - timedelta(days=1)
+    month_first_day = date(as_of.year, as_of.month, 1)
+    total_month_nyse = len(trading_days_between(month_first_day, month_last_day))
     nyse_remaining_month = len(trading_days_between(as_of + timedelta(days=1), month_last_day))
-    month_active_remaining = max(0, round(nyse_remaining_month * float(active_rate)))
 
-    if month_avg_pct > 0 and month_active_remaining > 0:
-        proj_remainder_factor = (Decimal("1") + month_avg_pct) ** Decimal(month_active_remaining)
-        proj_balance_eom_gross = latest.closing_balance * proj_remainder_factor
-        proj_remainder_gross = proj_balance_eom_gross - latest.closing_balance
+    # Compound $ projection: geo-rate compounded over remaining NYSE days,
+    # then 40% fee on the resulting full month gross.
+    if month_avg_gross_rate > 0 and nyse_remaining_month > 0:
+        proj_remainder_factor = (Decimal("1") + month_avg_gross_rate) ** Decimal(nyse_remaining_month)
+        proj_remainder_gross = latest.closing_balance * (proj_remainder_factor - Decimal("1"))
     else:
         proj_remainder_gross = ZERO
     month_proj_gross = mtd_gross + proj_remainder_gross
@@ -289,6 +292,10 @@ def snapshot(
     else:
         month_proj_net = month_proj_gross
 
+    # SIMPLE projected % (what shows inside the bar): avg_daily × total_days
+    month_simple_proj_gross_pct = month_avg_gross_rate * Decimal(total_month_nyse)
+    month_simple_proj_net_pct = month_avg_net_rate * Decimal(total_month_nyse)
+
     month_tile = MonthTile(
         year=as_of.year,
         month=as_of.month,
@@ -296,12 +303,14 @@ def snapshot(
         gross_pct=_safe_pct(mtd_gross, balance_at_month_start),
         net_pl=mtd_net,
         net_pct=_safe_pct(mtd_net, balance_at_month_start),
-        avg_daily_gain_rate=month_avg_pct,
-        remaining_trading_days=month_active_remaining,
+        avg_daily_gross_rate=month_avg_gross_rate,
+        avg_daily_net_rate=month_avg_net_rate,
+        remaining_trading_days=nyse_remaining_month,
+        total_trading_days=total_month_nyse,
         projected_gross_pl=month_proj_gross,
         projected_net_pl=month_proj_net,
-        projected_gross_pct=_safe_pct(month_proj_gross, balance_at_month_start),
-        projected_net_pct=_safe_pct(month_proj_net, balance_at_month_start),
+        projected_gross_pct=month_simple_proj_gross_pct,
+        projected_net_pct=month_simple_proj_net_pct,
     )
 
     # ---- year tile -------------------------------------------------------
@@ -354,22 +363,33 @@ def snapshot(
     balance_at_year_start = (
         states_before_year[-1].closing_balance if states_before_year else starting
     )
-    # YTD-only avg daily rate (geo mean) — drives the year projection.
+    # ---- Year projection ----
+    # Geo-mean YTD daily gross and net rates.
     ytd_active = [s for s in ytd_states if s.prior_balance > 0 and s.gross_pl != 0]
     if ytd_active:
-        f = Decimal("1")
+        fg = Decimal("1")
+        fn = Decimal("1")
         for s in ytd_active:
-            f *= (Decimal("1") + s.gross_pl / s.prior_balance)
-        year_avg_pct = f ** (Decimal("1") / Decimal(len(ytd_active))) - Decimal("1")
+            fg *= (Decimal("1") + s.gross_pl / s.prior_balance)
+            fn *= (Decimal("1") + daily_net(s.gross_pl) / s.prior_balance)
+        n = Decimal(len(ytd_active))
+        year_avg_gross_rate = fg ** (Decimal("1") / n) - Decimal("1")
+        year_avg_net_rate = fn ** (Decimal("1") / n) - Decimal("1")
     else:
-        year_avg_pct = ZERO
+        year_avg_gross_rate = ZERO
+        year_avg_net_rate = ZERO
 
-    # Project to year-end using the YTD avg rate (with monthly-fee deduction).
+    # NYSE trading-day counts.
+    year_start_calendar = date(as_of.year, 1, 1)
+    year_end_calendar = date(as_of.year, 12, 31)
+    total_year_nyse = len(trading_days_between(year_start_calendar, year_end_calendar))
+    nyse_remaining_year = len(trading_days_between(as_of + timedelta(days=1), year_end_calendar))
+
+    # Compound $ projection — keep using forecast_year_end (monthly-fee model).
     forecast = forecast_year_end(
-        states, as_of, commission_rate, rate_override=year_avg_pct
+        states, as_of, commission_rate, rate_override=year_avg_gross_rate
     )
     projected_remainder_net = forecast.projected_closing_balance - latest.closing_balance
-    # Each remaining month: net = 60% of gross, so gross = net / 0.6
     if projected_remainder_net > 0:
         projected_remainder_gross = projected_remainder_net / (Decimal("1") - commission_rate)
     else:
@@ -377,18 +397,24 @@ def snapshot(
     year_proj_gross = ytd_gross + projected_remainder_gross
     year_proj_net = ytd_net + projected_remainder_net
 
+    # SIMPLE projected % (bar display): avg_daily × total_trading_days
+    year_simple_proj_gross_pct = year_avg_gross_rate * Decimal(total_year_nyse)
+    year_simple_proj_net_pct = year_avg_net_rate * Decimal(total_year_nyse)
+
     year_tile = YearTile(
         year=as_of.year,
         gross_pl=ytd_gross,
         gross_pct=_safe_pct(ytd_gross, balance_at_year_start),
         net_pl=ytd_net,
         net_pct=_safe_pct(ytd_net, balance_at_year_start),
-        avg_daily_gain_rate=year_avg_pct,
-        remaining_trading_days=forecast.remaining_trading_days,
+        avg_daily_gross_rate=year_avg_gross_rate,
+        avg_daily_net_rate=year_avg_net_rate,
+        remaining_trading_days=nyse_remaining_year,
+        total_trading_days=total_year_nyse,
         projected_gross_pl=year_proj_gross,
         projected_net_pl=year_proj_net,
-        projected_gross_pct=_safe_pct(year_proj_gross, balance_at_year_start),
-        projected_net_pct=_safe_pct(year_proj_net, balance_at_year_start),
+        projected_gross_pct=year_simple_proj_gross_pct,
+        projected_net_pct=year_simple_proj_net_pct,
         projected_year_end_balance=forecast.projected_closing_balance,
     )
 

@@ -103,7 +103,7 @@ export default function DailyBarTile({
             sectionHeightPx={BAR_HEIGHT_PX}
             baseOffsetPx={0}
             colorClass="border-zinc-500 dark:border-zinc-300"
-            labelText={`avg gross ${formatMoneyShort(Number(avgGross))}`}
+            labelText={`avg ${formatMoneyShort(Number(avgGross))}`}
             labelTone="text-zinc-600 dark:text-zinc-300"
           />
           {/* Net reference line — white, in the bottom net zone */}
@@ -113,7 +113,7 @@ export default function DailyBarTile({
             sectionHeightPx={BOTTOM_SEGMENT_PX}
             baseOffsetPx={0}
             colorClass="border-white"
-            labelText={`avg net ${formatMoneyShort(Number(avgNet))}`}
+            labelText={`avg ${formatMoneyShort(Number(avgNet))}`}
             labelTone="text-zinc-600 dark:text-zinc-300"
           />
         </div>

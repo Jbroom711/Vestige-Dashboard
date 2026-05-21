@@ -157,9 +157,11 @@ class DailyTile(BaseModel):
 class MonthTile(BaseModel):
     """Month-to-date aggregate plus full-month projection.
 
-    Projection model: take the geometric-mean daily gross % across the active
-    days in the current month, compound it for the remaining trading days
-    in the month, then apply the 40% commission to the resulting month gain.
+    Two projection styles are exposed:
+      - projected_*_pct are SIMPLE (avg_daily_rate × total_trading_days),
+        which is the user's "if every day looked like the average" view.
+      - projected_*_pl ($) use the COMPOUND monthly-fee model (gross
+        compounds intra-month, 40% pulled at month-end).
     """
     year: int
     month: int
@@ -169,30 +171,38 @@ class MonthTile(BaseModel):
     net_pl: Decimal
     net_pct: Decimal
     # Projection
-    avg_daily_gain_rate: Decimal              # geo mean of MTD daily gross %s
-    remaining_trading_days: int               # active days through month-end
-    projected_gross_pl: Decimal               # full-month gross $
-    projected_net_pl: Decimal                 # full-month net $ (after monthly fee)
-    projected_gross_pct: Decimal              # full-month gross / month-start balance
-    projected_net_pct: Decimal
+    avg_daily_gross_rate: Decimal             # geo mean of MTD daily gross %s
+    avg_daily_net_rate: Decimal               # geo mean of MTD daily net %s
+    remaining_trading_days: int               # NYSE days from today to month-end
+    total_trading_days: int                   # NYSE days in this month (full)
+    projected_gross_pl: Decimal               # full-month gross $ (compound)
+    projected_net_pl: Decimal                 # full-month net $ (compound, after fee)
+    projected_gross_pct: Decimal              # SIMPLE: avg_daily_gross × total_days
+    projected_net_pct: Decimal                # SIMPLE: avg_daily_net × total_days
 
 
 class YearTile(BaseModel):
-    """Year-to-date aggregate plus full-year projection (monthly-fee model)."""
+    """Year-to-date aggregate plus full-year projection (monthly-fee model).
+
+    Same two-style projection as MonthTile: pct is SIMPLE
+    (avg_daily × total_days_in_year); $ is COMPOUND with monthly fees.
+    """
     year: int
     # Realized (YTD)
     gross_pl: Decimal
     gross_pct: Decimal                        # vs balance at start of year
     net_pl: Decimal
     net_pct: Decimal
-    # Projection (uses forecast_year_end with monthly fee deductions)
-    avg_daily_gain_rate: Decimal              # geo mean of YTD daily gross %s
-    remaining_trading_days: int               # active days through Dec 31
-    projected_gross_pl: Decimal               # full-year gross $
-    projected_net_pl: Decimal                 # full-year net $ (after all monthly fees)
-    projected_gross_pct: Decimal              # vs balance at start of year
-    projected_net_pct: Decimal
-    projected_year_end_balance: Decimal       # kept for back-compat
+    # Projection
+    avg_daily_gross_rate: Decimal             # geo mean of YTD daily gross %s
+    avg_daily_net_rate: Decimal               # geo mean of YTD daily net %s
+    remaining_trading_days: int               # NYSE days from today to Dec 31
+    total_trading_days: int                   # NYSE days in this year
+    projected_gross_pl: Decimal               # full-year gross $ (compound)
+    projected_net_pl: Decimal                 # full-year net $ (compound, after fees)
+    projected_gross_pct: Decimal              # SIMPLE: avg_daily_gross × total_days
+    projected_net_pct: Decimal                # SIMPLE: avg_daily_net × total_days
+    projected_year_end_balance: Decimal       # kept for reference
 
 
 class DailyBarPoint(BaseModel):

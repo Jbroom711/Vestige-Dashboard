@@ -24,7 +24,7 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
           {monthName(data.month)} {data.year}
           <span className="mx-2 text-zinc-300 dark:text-zinc-600">·</span>
           <span className="text-zinc-500">
-            {data.remainingTradingDays} day{data.remainingTradingDays === 1 ? "" : "s"} remaining
+            {data.remainingTradingDays} of {data.totalTradingDays} trading days remain
           </span>
         </p>
       </header>
