@@ -41,7 +41,7 @@ export default function DailyBarTile({
   return (
     <div className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <header className="mb-4">
-        <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
+        <h2 className="text-3xl font-bold text-zinc-800 dark:text-zinc-100">
           {formatDateWithWeekday(data.tradingDate)}
         </h2>
       </header>
