@@ -17,7 +17,7 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
   const positive = projGross > 0;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <header className="mb-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Monthly</h2>
         <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
@@ -29,7 +29,7 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
         </p>
       </header>
 
-      <div className="flex items-end justify-center gap-5">
+      <div className="mt-auto flex items-end justify-center gap-5">
         {/* --- The projection bar (no header, just the bar) --- */}
         <div className="relative" style={{ height: BAR_HEIGHT_PX, width: 140 }}>
           <div

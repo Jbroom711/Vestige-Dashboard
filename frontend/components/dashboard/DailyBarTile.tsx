@@ -39,7 +39,7 @@ export default function DailyBarTile({
   const negative = gross < 0;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <header className="mb-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Daily</h2>
         <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
@@ -49,7 +49,7 @@ export default function DailyBarTile({
         </p>
       </header>
 
-      <div className="flex items-end justify-center gap-5">
+      <div className="mt-auto flex items-end justify-center gap-5">
         {/* --- Bar container with headroom for avg lines --- */}
         <div className="relative" style={{ height: CONTAINER_HEIGHT_PX, width: 160 }}>
           <div
@@ -164,7 +164,7 @@ function AvgLineWithLabel({
         style={{ bottom: linePx }}
       />
       <div
-        className={`pointer-events-none absolute left-full ml-2 -translate-y-1/2 whitespace-nowrap text-[11px] font-medium ${labelTone}`}
+        className={`pointer-events-none absolute left-full ml-2 translate-y-1/2 whitespace-nowrap text-[11px] font-medium ${labelTone}`}
         style={{ bottom: linePx }}
       >
         {labelText}
