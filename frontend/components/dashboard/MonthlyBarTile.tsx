@@ -90,7 +90,7 @@ function DollarColumn({
   fullNet: number;
 }) {
   return (
-    <div className="flex w-24 flex-col" style={{ height: BAR_HEIGHT_PX + HEADER_PX }}>
+    <div className="flex w-36 flex-col" style={{ height: BAR_HEIGHT_PX + HEADER_PX }}>
       {/* Header labels: stacked, MTD black/bold + Full (E) grey/bold */}
       <div className="flex-none pb-1" style={{ height: HEADER_PX }}>
         <p className="text-xs font-bold leading-tight text-zinc-900 dark:text-zinc-100">MTD</p>
@@ -106,15 +106,21 @@ function DollarColumn({
 }
 
 function DollarPair({ flex, mtd, full }: { flex: number; mtd: number; full: number }) {
+  const mtdTone =
+    mtd > 0
+      ? "text-emerald-700 dark:text-emerald-400"
+      : mtd < 0
+        ? "text-red-700 dark:text-red-400"
+        : "text-zinc-700 dark:text-zinc-300";
   return (
     <div
       className="flex flex-col items-start justify-center gap-0.5"
       style={{ flex }}
     >
-      <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+      <span className={`text-xl font-semibold tabular-nums ${mtdTone}`}>
         {formatSignedMoney(mtd)}
       </span>
-      <span className="text-sm font-semibold tabular-nums text-zinc-500">
+      <span className="text-xl font-semibold tabular-nums text-zinc-500">
         {formatSignedMoney(full)} <span className="text-xs font-medium">E</span>
       </span>
     </div>
