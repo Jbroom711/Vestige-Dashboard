@@ -27,7 +27,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
           <AppNav />
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-zinc-500 sm:inline">{user?.email}</span>
+            <Link
+              href="/account"
+              className="hidden text-sm text-zinc-500 hover:text-zinc-900 hover:underline sm:inline dark:hover:text-zinc-100"
+            >
+              {user?.email}
+            </Link>
             <SignOutButton />
           </div>
         </div>
