@@ -42,7 +42,7 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
                     Gross
                   </span>
                   <span className="text-3xl font-bold tabular-nums text-black">
-                    {formatSignedPercent(projGrossPct, 2)}
+                    {formatSignedPercent(projGrossPct, 1)}
                   </span>
                 </div>
                 <div className="flex flex-[3] flex-col items-center justify-center bg-emerald-700 dark:bg-emerald-600">
@@ -50,7 +50,7 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
                     Net
                   </span>
                   <span className="text-3xl font-bold tabular-nums text-white">
-                    {formatSignedPercent(projNetPct, 2)}
+                    {formatSignedPercent(projNetPct, 1)}
                   </span>
                 </div>
               </>
