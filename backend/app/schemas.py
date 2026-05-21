@@ -144,7 +144,7 @@ class DashboardSummary(BaseModel):
 # ---------------------------------------------------------------------------
 class DailyTile(BaseModel):
     """Yesterday (or last trading day) summary."""
-    label: str                                # "Yesterday" or "Last trading day"
+    label: str                                # "Today", "Yesterday", or "Last day"
     trading_date: date | None                 # None if no history yet
     gross_pl: Decimal
     gross_pct: Decimal

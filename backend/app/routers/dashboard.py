@@ -162,7 +162,7 @@ def snapshot(
     # ---- empty case ------------------------------------------------------
     if not states:
         empty_daily = DailyTile(
-            label="Last trading day",
+            label="Last day",
             trading_date=None,
             gross_pl=ZERO, gross_pct=ZERO, net_pl=ZERO, net_pct=ZERO,
             avg_gross_pct_to_date=None, avg_net_pct_to_date=None,
@@ -199,7 +199,7 @@ def snapshot(
     elif latest.date == prev_trading_day(as_of):
         label = "Yesterday"
     else:
-        label = "Last trading day"
+        label = "Last day"
 
     gross_pct_latest = _safe_pct(latest.gross_pl, latest.prior_balance)
     net_pl_latest = daily_net(latest.gross_pl)

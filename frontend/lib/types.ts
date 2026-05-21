@@ -81,7 +81,7 @@ export interface DashboardSummary {
 
 // ---------- /dashboard/snapshot composite payload ------------------------
 export interface DailyTile {
-  label: "Today" | "Yesterday" | "Last trading day";
+  label: "Today" | "Yesterday" | "Last day";
   tradingDate: string | null;
   grossPl: MoneyStr;
   grossPct: PctStr;
