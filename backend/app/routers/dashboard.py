@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Annotated
 
@@ -16,7 +16,7 @@ from app.calc import (
     forecast_year_end,
 )
 from app.db import service_client
-from app.holidays import prev_trading_day
+from app.holidays import prev_trading_day, trading_days_between
 from app.schemas import (
     BalancePoint,
     DailyBarPoint,
@@ -175,12 +175,17 @@ def snapshot(
             month=MonthTile(
                 year=as_of.year, month=as_of.month,
                 gross_pl=ZERO, gross_pct=ZERO, net_pl=ZERO, net_pct=ZERO,
+                avg_daily_gain_rate=ZERO, remaining_trading_days=0,
+                projected_gross_pl=ZERO, projected_net_pl=ZERO,
+                projected_gross_pct=ZERO, projected_net_pct=ZERO,
             ),
             year=YearTile(
                 year=as_of.year,
                 gross_pl=ZERO, gross_pct=ZERO, net_pl=ZERO, net_pct=ZERO,
+                avg_daily_gain_rate=ZERO, remaining_trading_days=0,
+                projected_gross_pl=ZERO, projected_net_pl=ZERO,
+                projected_gross_pct=ZERO, projected_net_pct=ZERO,
                 projected_year_end_balance=starting,
-                avg_daily_gain_rate=ZERO,
             ),
             monthly_bars=[],
             monthly_avg_gross_pl=ZERO,
@@ -246,6 +251,44 @@ def snapshot(
     balance_at_month_start = (
         states_before_month[-1].closing_balance if states_before_month else starting
     )
+
+    # ---- Month projection: geo mean MTD daily % compounded for the rest of
+    # this month, then 40% fee applied to the full month's gross.
+    mtd_active = [s for s in mtd_states if s.prior_balance > 0 and s.gross_pl != 0]
+    if mtd_active:
+        f = Decimal("1")
+        for s in mtd_active:
+            f *= (Decimal("1") + s.gross_pl / s.prior_balance)
+        month_avg_pct = f ** (Decimal("1") / Decimal(len(mtd_active))) - Decimal("1")
+    else:
+        month_avg_pct = ZERO
+
+    # active rate from full history (same as forecast_year_end uses)
+    first_state_date = min(s.date for s in states)
+    hist_nyse = len(trading_days_between(first_state_date, as_of))
+    active_count = sum(1 for s in states if s.gross_pl != 0)
+    active_rate = Decimal(active_count) / Decimal(hist_nyse) if hist_nyse > 0 else Decimal("1")
+
+    # remaining trading days in this month
+    if as_of.month == 12:
+        month_last_day = date(as_of.year, 12, 31)
+    else:
+        month_last_day = date(as_of.year, as_of.month + 1, 1) - timedelta(days=1)
+    nyse_remaining_month = len(trading_days_between(as_of + timedelta(days=1), month_last_day))
+    month_active_remaining = max(0, round(nyse_remaining_month * float(active_rate)))
+
+    if month_avg_pct > 0 and month_active_remaining > 0:
+        proj_remainder_factor = (Decimal("1") + month_avg_pct) ** Decimal(month_active_remaining)
+        proj_balance_eom_gross = latest.closing_balance * proj_remainder_factor
+        proj_remainder_gross = proj_balance_eom_gross - latest.closing_balance
+    else:
+        proj_remainder_gross = ZERO
+    month_proj_gross = mtd_gross + proj_remainder_gross
+    if month_proj_gross > 0:
+        month_proj_net = month_proj_gross * (Decimal("1") - commission_rate)
+    else:
+        month_proj_net = month_proj_gross
+
     month_tile = MonthTile(
         year=as_of.year,
         month=as_of.month,
@@ -253,6 +296,12 @@ def snapshot(
         gross_pct=_safe_pct(mtd_gross, balance_at_month_start),
         net_pl=mtd_net,
         net_pct=_safe_pct(mtd_net, balance_at_month_start),
+        avg_daily_gain_rate=month_avg_pct,
+        remaining_trading_days=month_active_remaining,
+        projected_gross_pl=month_proj_gross,
+        projected_net_pl=month_proj_net,
+        projected_gross_pct=_safe_pct(month_proj_gross, balance_at_month_start),
+        projected_net_pct=_safe_pct(month_proj_net, balance_at_month_start),
     )
 
     # ---- year tile -------------------------------------------------------
@@ -305,15 +354,42 @@ def snapshot(
     balance_at_year_start = (
         states_before_year[-1].closing_balance if states_before_year else starting
     )
-    forecast = forecast_year_end(states, as_of, commission_rate)
+    # YTD-only avg daily rate (geo mean) — drives the year projection.
+    ytd_active = [s for s in ytd_states if s.prior_balance > 0 and s.gross_pl != 0]
+    if ytd_active:
+        f = Decimal("1")
+        for s in ytd_active:
+            f *= (Decimal("1") + s.gross_pl / s.prior_balance)
+        year_avg_pct = f ** (Decimal("1") / Decimal(len(ytd_active))) - Decimal("1")
+    else:
+        year_avg_pct = ZERO
+
+    # Project to year-end using the YTD avg rate (with monthly-fee deduction).
+    forecast = forecast_year_end(
+        states, as_of, commission_rate, rate_override=year_avg_pct
+    )
+    projected_remainder_net = forecast.projected_closing_balance - latest.closing_balance
+    # Each remaining month: net = 60% of gross, so gross = net / 0.6
+    if projected_remainder_net > 0:
+        projected_remainder_gross = projected_remainder_net / (Decimal("1") - commission_rate)
+    else:
+        projected_remainder_gross = projected_remainder_net
+    year_proj_gross = ytd_gross + projected_remainder_gross
+    year_proj_net = ytd_net + projected_remainder_net
+
     year_tile = YearTile(
         year=as_of.year,
         gross_pl=ytd_gross,
         gross_pct=_safe_pct(ytd_gross, balance_at_year_start),
         net_pl=ytd_net,
         net_pct=_safe_pct(ytd_net, balance_at_year_start),
+        avg_daily_gain_rate=year_avg_pct,
+        remaining_trading_days=forecast.remaining_trading_days,
+        projected_gross_pl=year_proj_gross,
+        projected_net_pl=year_proj_net,
+        projected_gross_pct=_safe_pct(year_proj_gross, balance_at_year_start),
+        projected_net_pct=_safe_pct(year_proj_net, balance_at_year_start),
         projected_year_end_balance=forecast.projected_closing_balance,
-        avg_daily_gain_rate=forecast.avg_daily_gain_rate,
     )
 
     # ---- monthly bars ----------------------------------------------------

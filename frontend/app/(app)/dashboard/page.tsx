@@ -1,11 +1,11 @@
 import BalanceLineChart from "@/components/dashboard/BalanceLineChart";
+import DailyBarTile from "@/components/dashboard/DailyBarTile";
 import DailyBarsChart from "@/components/dashboard/DailyBarsChart";
-import MonthTile from "@/components/dashboard/MonthTile";
+import MonthlyBarTile from "@/components/dashboard/MonthlyBarTile";
 import Section from "@/components/dashboard/Section";
-import YearTile from "@/components/dashboard/YearTile";
-import YesterdayTile from "@/components/dashboard/YesterdayTile";
+import YearlyBarTile from "@/components/dashboard/YearlyBarTile";
 import { ApiError, apiServer } from "@/lib/api.server";
-import { formatMoney, monthName } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import type { DashboardSnapshot } from "@/lib/types";
 
 export default async function DashboardPage() {
@@ -36,15 +36,19 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      <Section title="Daily" subtitle={snapshot.yesterday.label}>
-        <YesterdayTile data={snapshot.yesterday} avgGross={snapshot.allTimeAvgGrossPl} />
-      </Section>
+      {/* Top row: 3 parallel tiles — Daily / Monthly / Yearly */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <DailyBarTile
+          data={snapshot.yesterday}
+          avgGross={snapshot.allTimeAvgGrossPl}
+          avgNet={snapshot.allTimeAvgNetPl}
+        />
+        <MonthlyBarTile data={snapshot.month} />
+        <YearlyBarTile data={snapshot.year} />
+      </div>
 
-      <Section
-        title="Month"
-        subtitle={`${monthName(snapshot.month.month)} ${snapshot.month.year}`}
-      >
-        <MonthTile data={snapshot.month} />
+      {/* Charts kept below the tile row */}
+      <Section title="Daily breakdown" subtitle="Current month">
         <DailyBarsChart
           bars={snapshot.monthlyBars}
           avgGrossPl={snapshot.monthlyAvgGrossPl}
@@ -52,8 +56,7 @@ export default async function DashboardPage() {
         />
       </Section>
 
-      <Section title="Year" subtitle={String(snapshot.year.year)}>
-        <YearTile data={snapshot.year} />
+      <Section title="Balance over time" subtitle="All-time">
         <BalanceLineChart series={snapshot.balanceSeries} />
       </Section>
     </div>

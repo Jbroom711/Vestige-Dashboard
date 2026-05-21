@@ -94,20 +94,35 @@ export interface DailyTile {
 export interface MonthTile {
   year: number;
   month: number;
+  // Realized (MTD)
   grossPl: MoneyStr;
   grossPct: PctStr;
   netPl: MoneyStr;
   netPct: PctStr;
+  // Projection
+  avgDailyGainRate: PctStr;
+  remainingTradingDays: number;
+  projectedGrossPl: MoneyStr;
+  projectedNetPl: MoneyStr;
+  projectedGrossPct: PctStr;
+  projectedNetPct: PctStr;
 }
 
 export interface YearTile {
   year: number;
+  // Realized (YTD)
   grossPl: MoneyStr;
   grossPct: PctStr;
   netPl: MoneyStr;
   netPct: PctStr;
-  projectedYearEndBalance: MoneyStr;
+  // Projection
   avgDailyGainRate: PctStr;
+  remainingTradingDays: number;
+  projectedGrossPl: MoneyStr;
+  projectedNetPl: MoneyStr;
+  projectedGrossPct: PctStr;
+  projectedNetPct: PctStr;
+  projectedYearEndBalance: MoneyStr;
 }
 
 export interface DailyBarPoint {

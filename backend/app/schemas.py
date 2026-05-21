@@ -155,23 +155,44 @@ class DailyTile(BaseModel):
 
 
 class MonthTile(BaseModel):
-    """Month-to-date aggregate using accrued fee with carryforward."""
+    """Month-to-date aggregate plus full-month projection.
+
+    Projection model: take the geometric-mean daily gross % across the active
+    days in the current month, compound it for the remaining trading days
+    in the month, then apply the 40% commission to the resulting month gain.
+    """
     year: int
     month: int
+    # Realized (MTD)
     gross_pl: Decimal
     gross_pct: Decimal                        # vs balance at start of month
-    net_pl: Decimal                           # gross - accrued fee (with carryforward)
+    net_pl: Decimal
     net_pct: Decimal
+    # Projection
+    avg_daily_gain_rate: Decimal              # geo mean of MTD daily gross %s
+    remaining_trading_days: int               # active days through month-end
+    projected_gross_pl: Decimal               # full-month gross $
+    projected_net_pl: Decimal                 # full-month net $ (after monthly fee)
+    projected_gross_pct: Decimal              # full-month gross / month-start balance
+    projected_net_pct: Decimal
 
 
 class YearTile(BaseModel):
+    """Year-to-date aggregate plus full-year projection (monthly-fee model)."""
     year: int
+    # Realized (YTD)
     gross_pl: Decimal
     gross_pct: Decimal                        # vs balance at start of year
     net_pl: Decimal
     net_pct: Decimal
-    projected_year_end_balance: Decimal
-    avg_daily_gain_rate: Decimal
+    # Projection (uses forecast_year_end with monthly fee deductions)
+    avg_daily_gain_rate: Decimal              # geo mean of YTD daily gross %s
+    remaining_trading_days: int               # active days through Dec 31
+    projected_gross_pl: Decimal               # full-year gross $
+    projected_net_pl: Decimal                 # full-year net $ (after all monthly fees)
+    projected_gross_pct: Decimal              # vs balance at start of year
+    projected_net_pct: Decimal
+    projected_year_end_balance: Decimal       # kept for back-compat
 
 
 class DailyBarPoint(BaseModel):
