@@ -111,7 +111,7 @@ function DollarPair({ flex, primary, secondary }: { flex: number; primary: numbe
         {formatSignedMoney(primary)}
       </span>
       <span className="text-sm font-semibold tabular-nums text-zinc-500">
-        {formatSignedMoney(secondary)}
+        {formatSignedMoney(secondary)} <span className="text-xs font-medium">E</span>
       </span>
     </div>
   );
