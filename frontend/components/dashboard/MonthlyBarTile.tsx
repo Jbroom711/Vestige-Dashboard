@@ -117,11 +117,11 @@ function DollarPair({ flex, mtd, full }: { flex: number; mtd: number; full: numb
       className="flex flex-col items-start justify-center gap-0.5"
       style={{ flex }}
     >
-      <span className={`text-xl font-semibold tabular-nums ${mtdTone}`}>
+      <span className={`text-sm font-semibold tabular-nums ${mtdTone}`}>
         {formatSignedMoney(mtd)}
       </span>
       <span className="text-xl font-semibold tabular-nums text-zinc-500">
-        {formatSignedMoney(full)} <span className="text-xs font-medium">E</span>
+        {formatSignedMoney(full)} <span className="text-xl font-medium">E</span>
       </span>
     </div>
   );
