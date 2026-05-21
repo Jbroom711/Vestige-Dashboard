@@ -18,14 +18,12 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
 
   return (
     <div className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <header className="mb-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Yearly</h2>
-        <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
+      <header className="mb-4 flex items-baseline justify-between gap-3">
+        <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
           {data.year}
-          <span className="mx-2 text-zinc-300 dark:text-zinc-600">·</span>
-          <span className="text-zinc-500">
-            {data.remainingTradingDays} of {data.totalTradingDays} trading days remain
-          </span>
+        </h2>
+        <p className="text-sm text-zinc-500">
+          {data.totalTradingDays - data.remainingTradingDays} of {data.totalTradingDays} trading days
         </p>
       </header>
 

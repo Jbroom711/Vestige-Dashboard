@@ -1,4 +1,4 @@
-import { formatDate, formatSignedMoney, formatSignedPercent } from "@/lib/format";
+import { formatDateWithWeekday, formatSignedMoney, formatSignedPercent } from "@/lib/format";
 import type { DailyTile, MoneyStr } from "@/lib/types";
 
 const BAR_HEIGHT_PX = 280;
@@ -41,12 +41,9 @@ export default function DailyBarTile({
   return (
     <div className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <header className="mb-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Daily</h2>
-        <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
-          {data.label}
-          <span className="mx-2 text-zinc-300 dark:text-zinc-600">·</span>
-          <span className="text-zinc-700 dark:text-zinc-300">{formatDate(data.tradingDate)}</span>
-        </p>
+        <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
+          {formatDateWithWeekday(data.tradingDate)}
+        </h2>
       </header>
 
       <div className="mt-auto flex items-end justify-center gap-5">
