@@ -2,12 +2,12 @@ import { formatSignedMoney, formatSignedPercent } from "@/lib/format";
 import type { YearTile } from "@/lib/types";
 
 const BAR_HEIGHT_PX = 280;
+const HEADER_PX = 36; // space above the bar/column for "YTD / Full (E)" labels
 
 /**
- * Yearly tile. The bar represents the full-year *projection* (gross =
- * YTD + remaining-trading-days × YTD-avg-daily-gain compounded with monthly
- * fee deductions). To the right of the bar, two columns: YTD (already
- * realized) and Full Est. (projected full-year total).
+ * Yearly tile. Bar = projected full-year gross. Right side is a single
+ * narrow column with YTD ($) and Full Est. ($) stacked vertically, colored
+ * to match the header labels ("YTD" black/bold, "Full (E)" grey/bold).
  */
 export default function YearlyBarTile({ data }: { data: YearTile }) {
   const projGross = Number(data.projectedGrossPl);
@@ -30,8 +30,7 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
       </header>
 
       <div className="flex items-end justify-center gap-5">
-        {/* --- The projection bar --- */}
-        <div className="relative" style={{ height: BAR_HEIGHT_PX, width: 160 }}>
+        <div className="relative" style={{ height: BAR_HEIGHT_PX, width: 140 }}>
           <div
             className="absolute bottom-0 left-0 flex w-full flex-col overflow-hidden rounded-lg shadow-inner"
             style={{ height: BAR_HEIGHT_PX }}
@@ -43,7 +42,7 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
                     Gross
                   </span>
                   <span className="text-3xl font-bold tabular-nums text-black">
-                    {formatSignedPercent(projGrossPct, 1)}
+                    {formatSignedPercent(projGrossPct, 2)}
                   </span>
                 </div>
                 <div className="flex flex-[3] flex-col items-center justify-center bg-emerald-700 dark:bg-emerald-600">
@@ -51,7 +50,7 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
                     Net
                   </span>
                   <span className="text-3xl font-bold tabular-nums text-white">
-                    {formatSignedPercent(projNetPct, 1)}
+                    {formatSignedPercent(projNetPct, 2)}
                   </span>
                 </div>
               </>
@@ -68,16 +67,11 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
           </div>
         </div>
 
-        {/* --- Right side: YTD and Full Est. columns --- */}
         <DollarColumn
-          label="YTD"
-          grossDollar={Number(data.grossPl)}
-          netDollar={Number(data.netPl)}
-        />
-        <DollarColumn
-          label="Full Est."
-          grossDollar={projGross}
-          netDollar={projNet}
+          ytdGross={Number(data.grossPl)}
+          ytdNet={Number(data.netPl)}
+          fullGross={projGross}
+          fullNet={projNet}
         />
       </div>
     </div>
@@ -85,36 +79,41 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
 }
 
 function DollarColumn({
-  label,
-  grossDollar,
-  netDollar,
+  ytdGross,
+  ytdNet,
+  fullGross,
+  fullNet,
 }: {
-  label: string;
-  grossDollar: number;
-  netDollar: number;
+  ytdGross: number;
+  ytdNet: number;
+  fullGross: number;
+  fullNet: number;
 }) {
   return (
-    <div className="flex w-24 flex-col" style={{ height: BAR_HEIGHT_PX }}>
-      <p className="pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-        {label}
-      </p>
-      <DollarLine flex={2} amount={grossDollar} />
-      <DollarLine flex={3} amount={netDollar} />
+    <div className="flex w-24 flex-col" style={{ height: BAR_HEIGHT_PX + HEADER_PX }}>
+      <div className="flex-none pb-1" style={{ height: HEADER_PX }}>
+        <p className="text-xs font-bold leading-tight text-zinc-900 dark:text-zinc-100">YTD</p>
+        <p className="text-xs font-bold leading-tight text-zinc-500">Full (E)</p>
+      </div>
+      <div className="flex flex-1 flex-col">
+        <DollarPair flex={2} primary={ytdGross} secondary={fullGross} />
+        <DollarPair flex={3} primary={ytdNet} secondary={fullNet} />
+      </div>
     </div>
   );
 }
 
-function DollarLine({ flex, amount }: { flex: number; amount: number }) {
-  const tone =
-    amount > 0
-      ? "text-emerald-700 dark:text-emerald-400"
-      : amount < 0
-        ? "text-red-700 dark:text-red-400"
-        : "text-zinc-600 dark:text-zinc-300";
+function DollarPair({ flex, primary, secondary }: { flex: number; primary: number; secondary: number }) {
   return (
-    <div className="flex flex-col items-start justify-center" style={{ flex }}>
-      <span className={`text-base font-semibold tabular-nums ${tone}`}>
-        {formatSignedMoney(amount)}
+    <div
+      className="flex flex-col items-start justify-center gap-0.5"
+      style={{ flex }}
+    >
+      <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+        {formatSignedMoney(primary)}
+      </span>
+      <span className="text-sm font-semibold tabular-nums text-zinc-500">
+        {formatSignedMoney(secondary)}
       </span>
     </div>
   );

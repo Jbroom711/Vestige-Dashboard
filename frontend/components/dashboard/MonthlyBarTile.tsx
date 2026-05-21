@@ -2,14 +2,12 @@ import { formatSignedMoney, formatSignedPercent, monthName } from "@/lib/format"
 import type { MonthTile } from "@/lib/types";
 
 const BAR_HEIGHT_PX = 280;
+const HEADER_PX = 36; // space above the bar/column for "MTD / Full (E)" labels
 
 /**
- * Monthly tile. The bar represents the full-month *projection* (gross =
- * MTD + remaining-trading-days × avg-daily-gain compounded; net = gross × 0.6
- * since the broker takes 40% at month-end). To the right of the bar, two
- * columns: MTD (already realized) and Full Est. (projected full-month total),
- * each with gross + net dollar amounts vertically aligned to the bar's
- * top/bottom segments.
+ * Monthly tile. Bar = projected full-month gross. The right side is a single
+ * narrow column with MTD ($) and Full Est. ($) stacked vertically, colored
+ * to match the header labels ("MTD" black/bold, "Full (E)" grey/bold).
  */
 export default function MonthlyBarTile({ data }: { data: MonthTile }) {
   const projGross = Number(data.projectedGrossPl);
@@ -32,8 +30,8 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
       </header>
 
       <div className="flex items-end justify-center gap-5">
-        {/* --- The projection bar --- */}
-        <div className="relative" style={{ height: BAR_HEIGHT_PX, width: 160 }}>
+        {/* --- The projection bar (no header, just the bar) --- */}
+        <div className="relative" style={{ height: BAR_HEIGHT_PX, width: 140 }}>
           <div
             className="absolute bottom-0 left-0 flex w-full flex-col overflow-hidden rounded-lg shadow-inner"
             style={{ height: BAR_HEIGHT_PX }}
@@ -70,16 +68,12 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
           </div>
         </div>
 
-        {/* --- Right side: MTD and Full Est. columns --- */}
+        {/* --- Right side: header labels above, then stacked values aligned to bar segments --- */}
         <DollarColumn
-          label="MTD"
-          grossDollar={Number(data.grossPl)}
-          netDollar={Number(data.netPl)}
-        />
-        <DollarColumn
-          label="Full Est."
-          grossDollar={projGross}
-          netDollar={projNet}
+          mtdGross={Number(data.grossPl)}
+          mtdNet={Number(data.netPl)}
+          fullGross={projGross}
+          fullNet={projNet}
         />
       </div>
     </div>
@@ -87,36 +81,43 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
 }
 
 function DollarColumn({
-  label,
-  grossDollar,
-  netDollar,
+  mtdGross,
+  mtdNet,
+  fullGross,
+  fullNet,
 }: {
-  label: string;
-  grossDollar: number;
-  netDollar: number;
+  mtdGross: number;
+  mtdNet: number;
+  fullGross: number;
+  fullNet: number;
 }) {
   return (
-    <div className="flex w-24 flex-col" style={{ height: BAR_HEIGHT_PX }}>
-      <p className="pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-        {label}
-      </p>
-      <DollarLine flex={2} amount={grossDollar} />
-      <DollarLine flex={3} amount={netDollar} />
+    <div className="flex w-24 flex-col" style={{ height: BAR_HEIGHT_PX + HEADER_PX }}>
+      {/* Header labels: stacked, MTD black/bold + Full (E) grey/bold */}
+      <div className="flex-none pb-1" style={{ height: HEADER_PX }}>
+        <p className="text-xs font-bold leading-tight text-zinc-900 dark:text-zinc-100">MTD</p>
+        <p className="text-xs font-bold leading-tight text-zinc-500">Full (E)</p>
+      </div>
+      {/* Values, with the bar's 2/3 vertical split */}
+      <div className="flex flex-1 flex-col">
+        <DollarPair flex={2} mtd={mtdGross} full={fullGross} />
+        <DollarPair flex={3} mtd={mtdNet} full={fullNet} />
+      </div>
     </div>
   );
 }
 
-function DollarLine({ flex, amount }: { flex: number; amount: number }) {
-  const tone =
-    amount > 0
-      ? "text-emerald-700 dark:text-emerald-400"
-      : amount < 0
-        ? "text-red-700 dark:text-red-400"
-        : "text-zinc-600 dark:text-zinc-300";
+function DollarPair({ flex, mtd, full }: { flex: number; mtd: number; full: number }) {
   return (
-    <div className="flex flex-col items-start justify-center" style={{ flex }}>
-      <span className={`text-base font-semibold tabular-nums ${tone}`}>
-        {formatSignedMoney(amount)}
+    <div
+      className="flex flex-col items-start justify-center gap-0.5"
+      style={{ flex }}
+    >
+      <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+        {formatSignedMoney(mtd)}
+      </span>
+      <span className="text-sm font-semibold tabular-nums text-zinc-500">
+        {formatSignedMoney(full)}
       </span>
     </div>
   );

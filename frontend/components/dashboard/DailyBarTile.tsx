@@ -63,7 +63,7 @@ export default function DailyBarTile({
                     Gross
                   </span>
                   <span className="text-3xl font-bold tabular-nums text-black">
-                    {formatSignedPercent(data.grossPct, 3)}
+                    {formatSignedPercent(data.grossPct, 2)}
                   </span>
                 </div>
                 <div className="flex flex-[3] flex-col items-center justify-center bg-emerald-700 dark:bg-emerald-600">
@@ -71,7 +71,7 @@ export default function DailyBarTile({
                     Net
                   </span>
                   <span className="text-3xl font-bold tabular-nums text-white">
-                    {formatSignedPercent(data.netPct, 3)}
+                    {formatSignedPercent(data.netPct, 2)}
                   </span>
                 </div>
               </>
