@@ -191,6 +191,46 @@ function PlanRow({ plan }: { plan: PlannedCapitalChange }) {
   );
 }
 
+// NYSE Monday holidays that 2026 actually has. If a user picks a date whose
+// "next Monday" lands on one of these, the deposit rolls to the Monday after.
+const MONDAY_HOLIDAYS = new Set<string>([
+  "2026-01-19", // MLK Day
+  "2026-02-16", // Presidents Day
+  "2026-05-25", // Memorial Day
+  "2026-09-07", // Labor Day
+]);
+
+function isoFromDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Returns next Monday on/after `isoDate` that isn't a Monday NYSE holiday,
+ * or null if no such Monday exists in the same calendar year. */
+function nextDepositMonday(isoDate: string): string | null {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const offsetToMonday = (1 - date.getDay() + 7) % 7;
+  date.setDate(date.getDate() + offsetToMonday);
+  while (MONDAY_HOLIDAYS.has(isoFromDate(date))) {
+    date.setDate(date.getDate() + 7);
+  }
+  if (date.getFullYear() > y) return null;
+  return isoFromDate(date);
+}
+
+function formatPrettyDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(y, m - 1, d));
+}
+
 function AddPlanForm({
   type,
   mondayOnly,
@@ -209,6 +249,13 @@ function AddPlanForm({
   const minDate = new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const maxDate = yearEnd.toISOString().slice(0, 10);
 
+  // For deposits, auto-roll to the next Monday. The note tells the user.
+  const effectiveDate = date
+    ? mondayOnly
+      ? nextDepositMonday(date)
+      : date
+    : "";
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -216,17 +263,17 @@ function AddPlanForm({
       setError("Date and amount required");
       return;
     }
-    if (mondayOnly) {
-      const [y, m, d] = date.split("-").map(Number);
-      const weekday = new Date(y, m - 1, d).getDay();
-      if (weekday !== 1) {
-        setError("Deposits must be on a Monday");
-        return;
-      }
+    if (mondayOnly && !effectiveDate) {
+      setError("No deposit Mondays remain this year");
+      return;
     }
     setBusy(true);
     try {
-      await api.post("/planned-capital", { date, amount, type });
+      await api.post("/planned-capital", {
+        date: effectiveDate,
+        amount,
+        type,
+      });
       setDate("");
       setAmount("");
       router.refresh();
@@ -238,19 +285,31 @@ function AddPlanForm({
     }
   }
 
+  // Show the "begins trading on..." note only when the auto-rolled Monday
+  // differs from the date the user actually picked.
+  const showRollNote =
+    mondayOnly && date && effectiveDate && effectiveDate !== date;
+
   return (
     <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
-      <label className="space-y-0.5">
-        <span className="block text-[10px] uppercase tracking-wide text-zinc-500">Date</span>
-        <input
-          type="date"
-          min={minDate}
-          max={maxDate}
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-        />
-      </label>
+      <div className="flex flex-col space-y-0.5">
+        <label className="space-y-0.5">
+          <span className="block text-[10px] uppercase tracking-wide text-zinc-500">Date</span>
+          <input
+            type="date"
+            min={minDate}
+            max={maxDate}
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+          />
+        </label>
+        {showRollNote ? (
+          <p className="text-[11px] italic text-zinc-500">
+            Begins trading on {formatPrettyDate(effectiveDate!)}
+          </p>
+        ) : null}
+      </div>
       <label className="space-y-0.5">
         <span className="block text-[10px] uppercase tracking-wide text-zinc-500">Amount $</span>
         <input
