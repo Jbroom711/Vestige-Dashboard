@@ -93,6 +93,23 @@ class CapitalChangeCreate(BaseModel):
     note: str | None = None
 
 
+# Planned capital changes (future events for projection)
+class PlannedCapitalChangeOut(ORMModel):
+    id: UUID
+    user_id: UUID
+    date: date
+    amount: Decimal
+    type: CapitalChangeType
+    note: str | None
+
+
+class PlannedCapitalChangeCreate(BaseModel):
+    date: date
+    amount: Decimal = Field(gt=0)
+    type: CapitalChangeType
+    note: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Monthly fees
 # ---------------------------------------------------------------------------
@@ -219,6 +236,21 @@ class BalancePoint(BaseModel):
     deployed_capital: Decimal
 
 
+class AnnualProjectionTile(BaseModel):
+    """Year-end projection that incorporates the user's planned future
+    deposits/withdrawals. When the user has no plans, this equals the
+    Yearly tile's Full Est. Same monthly-fee compounding model, but the
+    walk applies each planned capital change on its date so subsequent
+    days compound on the adjusted balance."""
+    starting_balance: Decimal                 # user's profile starting_balance
+    current_balance: Decimal                  # latest closing balance
+    projected_year_end_balance: Decimal
+    projected_gross_pl: Decimal               # full-year gross $ (incl. plans' compounding contribution)
+    projected_net_pl: Decimal                 # full-year net $ (after monthly fees)
+    projected_gross_pct: Decimal              # gross / current_balance (so "% from today")
+    projected_net_pct: Decimal
+
+
 class DashboardSnapshot(BaseModel):
     as_of: date
     current_balance: Decimal
@@ -226,6 +258,8 @@ class DashboardSnapshot(BaseModel):
     yesterday: DailyTile
     month: MonthTile
     year: YearTile
+    annual_projection: AnnualProjectionTile
+    planned_changes: list[PlannedCapitalChangeOut]  # so the Annual tile can render the form
     monthly_bars: list[DailyBarPoint]         # current-month days, oldest first
     monthly_avg_gross_pl: Decimal             # for the bar-chart trendline ($ avg)
     monthly_avg_net_pl: Decimal

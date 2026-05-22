@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import capital, dashboard, fees, profiles, returns
+from app.routers import capital, dashboard, fees, planned_capital, profiles, returns
 
 
 def create_app() -> FastAPI:
@@ -32,6 +32,7 @@ def create_app() -> FastAPI:
     app.include_router(returns.router)
     app.include_router(capital.router)
     app.include_router(fees.router)
+    app.include_router(planned_capital.router)
     app.include_router(dashboard.router)
 
     return app

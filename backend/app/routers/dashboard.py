@@ -14,10 +14,12 @@ from app.calc import (
     compute_monthly_fees,
     deployed_capital,
     forecast_year_end,
+    project_year_with_plans,
 )
 from app.db import service_client
 from app.holidays import prev_trading_day, trading_days_between
 from app.schemas import (
+    AnnualProjectionTile,
     BalancePoint,
     DailyBarPoint,
     DailyTile,
@@ -25,6 +27,7 @@ from app.schemas import (
     DashboardSummary,
     DayStateOut,
     MonthTile,
+    PlannedCapitalChangeOut,
     YearTile,
 )
 from app.state import evolve_user_balance, evolve_user_balance_with_inputs
@@ -189,6 +192,16 @@ def snapshot(
                 projected_gross_pct=ZERO, projected_net_pct=ZERO,
                 projected_year_end_balance=starting,
             ),
+            annual_projection=AnnualProjectionTile(
+                starting_balance=starting,
+                current_balance=starting,
+                projected_year_end_balance=starting,
+                projected_gross_pl=ZERO,
+                projected_net_pl=ZERO,
+                projected_gross_pct=ZERO,
+                projected_net_pct=ZERO,
+            ),
+            planned_changes=[],
             monthly_bars=[],
             monthly_avg_gross_pl=ZERO,
             monthly_avg_net_pl=ZERO,
@@ -418,6 +431,55 @@ def snapshot(
         projected_year_end_balance=forecast.projected_closing_balance,
     )
 
+    # ---- annual projection (incorporates planned future capital changes) ----
+    planned_rows = (
+        service_client()
+        .table("planned_capital_changes")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date")
+        .execute()
+    ).data or []
+    planned_changes = [
+        CapitalChange(
+            date=date.fromisoformat(r["date"]),
+            amount=Decimal(str(r["amount"])),
+            type=r["type"],
+        )
+        for r in planned_rows
+    ]
+
+    # Active rate: how often the user actually traded NYSE sessions historically.
+    hist_nyse_total = len(trading_days_between(min(s.date for s in states), as_of))
+    active_count_total = sum(1 for s in states if s.gross_pl != 0)
+    active_rate_for_proj = (
+        Decimal(active_count_total) / Decimal(hist_nyse_total)
+        if hist_nyse_total > 0
+        else Decimal("1")
+    )
+
+    annual_proj = project_year_with_plans(
+        current_balance=latest.closing_balance,
+        as_of=as_of,
+        commission_rate=commission_rate,
+        daily_rate=year_avg_gross_rate,
+        active_rate=active_rate_for_proj,
+        planned_changes=planned_changes,
+    )
+    # Full-year totals = YTD (already realized) + projected remainder
+    full_year_gross = ytd_gross + annual_proj.projected_gross_pl
+    full_year_net = ytd_net + annual_proj.projected_net_pl
+    annual_projection_tile = AnnualProjectionTile(
+        starting_balance=starting,
+        current_balance=latest.closing_balance,
+        projected_year_end_balance=annual_proj.projected_balance,
+        projected_gross_pl=full_year_gross,
+        projected_net_pl=full_year_net,
+        projected_gross_pct=_safe_pct(full_year_gross, balance_at_year_start),
+        projected_net_pct=_safe_pct(full_year_net, balance_at_year_start),
+    )
+    planned_changes_out = [PlannedCapitalChangeOut(**r) for r in planned_rows]
+
     # ---- monthly bars ----------------------------------------------------
     monthly_bars: list[DailyBarPoint] = []
     for s in mtd_states:
@@ -478,6 +540,8 @@ def snapshot(
         yesterday=yesterday_tile,
         month=month_tile,
         year=year_tile,
+        annual_projection=annual_projection_tile,
+        planned_changes=planned_changes_out,
         monthly_bars=monthly_bars,
         monthly_avg_gross_pl=avg_gross_pl_dollar,
         monthly_avg_net_pl=avg_net_pl_dollar,

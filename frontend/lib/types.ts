@@ -45,6 +45,15 @@ export interface CapitalChange {
   note: string | null;
 }
 
+export interface PlannedCapitalChange {
+  id: string;
+  userId: string;
+  date: string;
+  amount: MoneyStr;
+  type: CapitalChangeType;
+  note: string | null;
+}
+
 export interface MonthlyFee {
   id: string;
   userId: string;
@@ -142,6 +151,16 @@ export interface BalancePoint {
   deployedCapital: MoneyStr;
 }
 
+export interface AnnualProjectionTileData {
+  startingBalance: MoneyStr;
+  currentBalance: MoneyStr;
+  projectedYearEndBalance: MoneyStr;
+  projectedGrossPl: MoneyStr;
+  projectedNetPl: MoneyStr;
+  projectedGrossPct: PctStr;
+  projectedNetPct: PctStr;
+}
+
 export interface DashboardSnapshot {
   asOf: string;
   currentBalance: MoneyStr;
@@ -149,6 +168,8 @@ export interface DashboardSnapshot {
   yesterday: DailyTile;
   month: MonthTile;
   year: YearTile;
+  annualProjection: AnnualProjectionTileData;
+  plannedChanges: PlannedCapitalChange[];
   monthlyBars: DailyBarPoint[];
   monthlyAvgGrossPl: MoneyStr;
   monthlyAvgNetPl: MoneyStr;

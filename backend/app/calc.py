@@ -318,6 +318,103 @@ def forecast_year_end(
 
 
 # ---------------------------------------------------------------------------
+# Annual projection that incorporates planned future capital changes
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class AnnualProjectionResult:
+    projected_balance: Decimal
+    projected_gross_pl: Decimal
+    projected_net_pl: Decimal
+    projected_fees: Decimal
+
+
+def project_year_with_plans(
+    current_balance: Decimal,
+    as_of: date,
+    commission_rate: Decimal,
+    daily_rate: Decimal,
+    active_rate: Decimal,
+    planned_changes: list[CapitalChange],
+) -> AnnualProjectionResult:
+    """Walk month-by-month from as_of+1 to Dec 31 of as_of's year.
+
+    Within each month, capital changes split the month into subperiods. Each
+    subperiod compounds at `daily_rate` for its share of active NYSE trading
+    days; at the end of each subperiod, the planned change is applied. At
+    month-end, 40% of the month's trading gain is deducted as fee (skipped
+    on losing months). When planned_changes is empty, this matches the
+    Yearly tile's existing forecast_year_end output.
+    """
+    from app.holidays import trading_days_between
+
+    year_end = date(as_of.year, 12, 31)
+    caps_by_date: dict[date, Decimal] = {}
+    for c in planned_changes:
+        caps_by_date[c.date] = caps_by_date.get(c.date, Decimal("0")) + c.signed_amount
+
+    bal = current_balance
+    total_gross = Decimal("0")
+    total_fees = Decimal("0")
+
+    cur_y, cur_m = as_of.year, as_of.month
+    while cur_y == as_of.year:
+        if cur_m == 12:
+            month_end = date(cur_y, 12, 31)
+            next_y, next_m = cur_y + 1, 1
+        else:
+            month_end = date(cur_y, cur_m + 1, 1) - timedelta(days=1)
+            next_y, next_m = cur_y, cur_m + 1
+        month_start = max(as_of + timedelta(days=1), date(cur_y, cur_m, 1))
+
+        bal_start_of_month = bal
+        month_changes = sorted(
+            (d, amt) for d, amt in caps_by_date.items() if month_start <= d <= month_end
+        )
+
+        # Walk subperiods between changes (inclusive of change_date for trading)
+        chunk_start = month_start
+        for change_date, change_amount in month_changes:
+            chunk_nyse = len(trading_days_between(chunk_start, change_date))
+            chunk_active = max(0, round(chunk_nyse * float(active_rate)))
+            if chunk_active > 0:
+                factor = (Decimal("1") + daily_rate) ** Decimal(chunk_active)
+                gain = bal * (factor - Decimal("1"))
+                bal += gain
+                total_gross += gain
+            bal += change_amount
+            chunk_start = change_date + timedelta(days=1)
+
+        # Final chunk to month-end
+        if chunk_start <= month_end:
+            chunk_nyse = len(trading_days_between(chunk_start, month_end))
+            chunk_active = max(0, round(chunk_nyse * float(active_rate)))
+            if chunk_active > 0:
+                factor = (Decimal("1") + daily_rate) ** Decimal(chunk_active)
+                gain = bal * (factor - Decimal("1"))
+                bal += gain
+                total_gross += gain
+
+        # End-of-month fee
+        change_total = sum((amt for _, amt in month_changes), Decimal("0"))
+        month_gross = bal - bal_start_of_month - change_total
+        if month_gross > 0:
+            fee = month_gross * commission_rate
+            bal -= fee
+            total_fees += fee
+
+        if next_y > as_of.year:
+            break
+        cur_y, cur_m = next_y, next_m
+
+    return AnnualProjectionResult(
+        projected_balance=_qmoney(bal),
+        projected_gross_pl=_qmoney(total_gross),
+        projected_net_pl=_qmoney(total_gross - total_fees),
+        projected_fees=_qmoney(total_fees),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Deployed capital (informational)
 # ---------------------------------------------------------------------------
 def deployed_capital(

@@ -1,3 +1,4 @@
+import AnnualProjectionTile from "@/components/dashboard/AnnualProjectionTile";
 import BalanceLineChart from "@/components/dashboard/BalanceLineChart";
 import DailyBarTile from "@/components/dashboard/DailyBarTile";
 import DailyBarsChart from "@/components/dashboard/DailyBarsChart";
@@ -47,7 +48,13 @@ export default async function DashboardPage() {
         <YearlyBarTile data={snapshot.year} />
       </div>
 
-      {/* Charts kept below the tile row */}
+      {/* Full-width Annual Projection tile under the 3-tile row */}
+      <AnnualProjectionTile
+        data={snapshot.annualProjection}
+        plannedChanges={snapshot.plannedChanges}
+      />
+
+      {/* Charts kept below */}
       <Section title="Daily breakdown" subtitle="Current month">
         <DailyBarsChart
           bars={snapshot.monthlyBars}
