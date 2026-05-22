@@ -466,7 +466,13 @@ def snapshot(
         active_rate=active_rate_for_proj,
         planned_changes=planned_changes,
     )
-    # Full-year totals = YTD (already realized) + projected remainder
+    # Full-year totals = YTD (already realized) + projected remainder. The $
+    # amounts ARE expected to grow with planned deposits (more capital → more
+    # earnings). The %s on the other hand are RATE-based: they represent
+    # "what return rate the strategy is producing", which is independent of
+    # how much capital is currently working. So we use the same simple
+    # avg_daily × total_trading_days figure as the Yearly tile's bar — it
+    # doesn't move when the user adds planned capital changes.
     full_year_gross = ytd_gross + annual_proj.projected_gross_pl
     full_year_net = ytd_net + annual_proj.projected_net_pl
     annual_projection_tile = AnnualProjectionTile(
@@ -475,8 +481,8 @@ def snapshot(
         projected_year_end_balance=annual_proj.projected_balance,
         projected_gross_pl=full_year_gross,
         projected_net_pl=full_year_net,
-        projected_gross_pct=_safe_pct(full_year_gross, balance_at_year_start),
-        projected_net_pct=_safe_pct(full_year_net, balance_at_year_start),
+        projected_gross_pct=year_simple_proj_gross_pct,
+        projected_net_pct=year_simple_proj_net_pct,
     )
     planned_changes_out = [PlannedCapitalChangeOut(**r) for r in planned_rows]
 
