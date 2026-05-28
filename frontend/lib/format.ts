@@ -36,7 +36,7 @@ export function formatDate(iso: string): string {
 export function formatDateWithWeekday(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
+    weekday: "short",
     month: "long",
     day: "numeric",
   }).format(new Date(y, m - 1, d));
