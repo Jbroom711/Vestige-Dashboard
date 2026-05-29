@@ -2,13 +2,15 @@
 any new rows into daily_returns. Designed to be invoked by a Railway
 scheduled task.
 
-Auth env vars (one of these is required):
+Auth path priority (highest wins):
 
-  VHG_COOKIE    Browser session cookie string (preferred — survives the
-                Cloudflare/WAF block that breaks credential-based login).
-                Format: "name1=val1; name2=val2; ...".
-  VHG_EMAIL +   Credentials fallback. Usually blocked by Cloudflare on
-  VHG_PASSWORD  hosted environments; kept for future or alternate access.
+  1. VHG_EMAIL + VHG_PASSWORD → Playwright (headless Chromium) drives the
+     WordPress login form and solves Cloudflare in-browser. Survives the
+     Railway-IP Cloudflare block that breaks plain httpx calls. Required
+     for fully unattended operation from a hosted environment.
+  2. VHG_COOKIE → reuse a manually-extracted browser cookie. Skips login
+     but bound to the IP that issued the cookie; usually breaks on hosted
+     environments behind Cloudflare. Kept as a low-cost fallback.
 
 Optional:
   VHG_ACCNUM    default '1011389'  (Jonathan's Vestige account number)
@@ -32,10 +34,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(_HERE, "..")))
 from app.db import service_client  # noqa: E402
 from app.scrapers.vhg import (  # noqa: E402
     VHGScrapeError,
-    fetch_html,
     fetch_html_with_cookie,
     parse_html,
 )
+
+try:
+    from app.scrapers.vhg_playwright import fetch_html_via_browser  # noqa: E402
+    _PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    _PLAYWRIGHT_AVAILABLE = False
 
 
 def main() -> int:
@@ -47,61 +54,59 @@ def main() -> int:
 
     sb_early = service_client()
 
-    # Prefer the DB-stored cookie (kept fresh by previous runs via WP's
-    # sliding-session refresh). Fall back to env var on first bootstrap.
-    db_row = (
-        sb_early.table("scraper_cookies")
-        .select("cookie, refreshed_at")
-        .eq("name", "vhg")
-        .limit(1)
-        .execute()
-        .data
-    )
-    db_cookie = db_row[0]["cookie"] if db_row else None
-    if db_cookie:
-        cookie_source = "db"
-        cookie = db_cookie
-        print(f"[vhg-refresh] using cookie from DB (refreshed_at={db_row[0]['refreshed_at']})")
-    elif cookie:
-        cookie_source = "env"
-        print(f"[vhg-refresh] using cookie from env (length {len(cookie)} chars)")
+    # --- Auth path selection ---------------------------------------------
+    # Path 1 (preferred from a hosted IP): Playwright drives a real browser
+    # so it can solve Cloudflare and acquire its own cf_clearance cookie.
+    if email and password and _PLAYWRIGHT_AVAILABLE:
+        print(f"[vhg-refresh] auth mode = Playwright browser ({email})")
+        try:
+            html = fetch_html_via_browser(email, password, accnum, userid)
+        except VHGScrapeError as e:
+            print(f"[vhg-refresh] Playwright fetch failed: {e}", file=sys.stderr)
+            return 2
     else:
-        cookie_source = None
+        # Path 2 (fallback): reuse a manually extracted browser cookie.
+        # Usually fails from hosted environments because Cloudflare binds
+        # cf_clearance to the issuing IP.
+        db_row = (
+            sb_early.table("scraper_cookies")
+            .select("cookie, refreshed_at")
+            .eq("name", "vhg")
+            .limit(1)
+            .execute()
+            .data
+        )
+        db_cookie = db_row[0]["cookie"] if db_row else None
+        if db_cookie:
+            cookie_source = "db"
+            cookie = db_cookie
+            print(f"[vhg-refresh] using cookie from DB (refreshed_at={db_row[0]['refreshed_at']})")
+        elif cookie:
+            cookie_source = "env"
+            print(f"[vhg-refresh] using cookie from env (length {len(cookie)} chars)")
+        else:
+            print(
+                "ERROR: set VHG_EMAIL+VHG_PASSWORD (Playwright path) or VHG_COOKIE",
+                file=sys.stderr,
+            )
+            return 1
 
-    if cookie:
         try:
             html, refreshed_cookie = fetch_html_with_cookie(cookie, accnum, userid)
         except VHGScrapeError as e:
             print(f"[vhg-refresh] cookie fetch failed: {e}", file=sys.stderr)
             return 2
 
-        # Persist any refreshed cookie returned via WP's Set-Cookie response.
-        # This is the auto-renewal half of the sliding-session pattern.
         if refreshed_cookie:
             sb_early.table("scraper_cookies").upsert(
                 {"name": "vhg", "cookie": refreshed_cookie}
             ).execute()
             print("[vhg-refresh] cookie auto-renewed via Set-Cookie (saved to DB)")
         elif cookie_source == "env":
-            # First run with env-var cookie — seed the DB so future runs
-            # update from there even if no Set-Cookie was sent.
             sb_early.table("scraper_cookies").upsert(
                 {"name": "vhg", "cookie": cookie}
             ).execute()
             print("[vhg-refresh] seeded DB with env-var cookie")
-    elif email and password:
-        print(f"[vhg-refresh] auth mode = credentials ({email})")
-        try:
-            html = fetch_html(email, password, accnum, userid)
-        except VHGScrapeError as e:
-            print(f"[vhg-refresh] login/fetch failed: {e}", file=sys.stderr)
-            return 2
-    else:
-        print(
-            "ERROR: set VHG_COOKIE (preferred) or VHG_EMAIL + VHG_PASSWORD",
-            file=sys.stderr,
-        )
-        return 1
 
     print(f"[vhg-refresh] fetched {len(html):,} bytes of HTML")
 

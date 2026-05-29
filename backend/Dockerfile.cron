@@ -1,0 +1,27 @@
+# Dockerfile for the daily-refresh cron service.
+#
+# The Microsoft-published Playwright Python image ships Chromium plus all
+# the system libraries (libnss, libatk, fonts, etc.) Playwright needs. Pinning
+# to v1.49.0 keeps the Chromium build aligned with the `playwright==1.49.0`
+# Python wheel — if you bump one, bump the other.
+#
+# The main web service does not use this Dockerfile; it stays on the
+# Procfile-based nixpacks build so its image doesn't carry the ~700 MB of
+# Chromium it would never run.
+
+FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy
+
+WORKDIR /app
+
+# Install Python deps first to benefit from layer caching.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the backend source.
+COPY . .
+
+# Ensure logs flush in real time so Railway shows them live.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+CMD ["python", "scripts/refresh_daily.py"]
