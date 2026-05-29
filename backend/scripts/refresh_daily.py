@@ -165,8 +165,11 @@ def main() -> int:
         if date_str in existing_dates:
             skipped += 1
             continue
-        if row.gross_profit == 0 and row.closing_balance == 0:
-            # vhg.app sometimes emits zero filler rows; ignore them.
+        if row.gross_profit == 0:
+            # vhg.app emits zero-gross rows for non-trading days (holidays
+            # like Christmas, Good Friday, days Vestige paused). daily_returns
+            # only stores active trading days; the dashboard treats missing
+            # dates as "no activity" automatically.
             skipped += 1
             continue
         if i == 0:
