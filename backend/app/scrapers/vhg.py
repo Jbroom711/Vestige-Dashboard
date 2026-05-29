@@ -302,14 +302,29 @@ def parse_html(html: str) -> list[VHGRow]:
         )
 
     rows: list[VHGRow] = []
+    skipped_samples: list[str] = []
     for label, bal, g in zip(labels, balance, gross):
         try:
             d = _parse_date(label)
             bal_dec = Decimal(bal.replace(",", "").replace("$", ""))
             g_dec = Decimal(g.replace(",", "").replace("$", ""))
-        except (ValueError, ArithmeticError):
+        except (ValueError, ArithmeticError) as e:
+            if len(skipped_samples) < 3:
+                skipped_samples.append(
+                    f"label={label!r}, bal={bal!r}, gross={g!r}, err={e!s}"
+                )
             continue
         rows.append(VHGRow(date=d, closing_balance=bal_dec, gross_profit=g_dec))
+
+    # Diagnostic: if we got nothing, surface what we tried to parse so the
+    # cron logs make the format mismatch obvious.
+    if not rows and labels:
+        for sample in skipped_samples:
+            print(f"[vhg-parse] skipped: {sample}")
+        print(
+            f"[vhg-parse] NO ROWS produced. First label={labels[0]!r}, "
+            f"first balance={balance[0]!r}, first gross={gross[0]!r}"
+        )
     return rows
 
 
