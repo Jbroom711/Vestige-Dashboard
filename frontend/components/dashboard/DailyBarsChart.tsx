@@ -13,6 +13,7 @@ import {
 } from "recharts";
 
 import { formatMoney, formatSignedPercent, monthName } from "@/lib/format";
+import { useIsMobile } from "@/lib/useIsMobile";
 import type { DailyBarPoint } from "@/lib/types";
 
 interface Props {
@@ -71,17 +72,37 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
   const [y, m] = bars[0].date.split("-").map(Number);
   const monthFullName = monthName(m);
   const title = `${monthFullName} ${y} Daily Performance`;
+  const isMobile = useIsMobile();
+  // Reserve less right margin on mobile (just enough to fit "$X,XXX"), no
+  // "Avg" suffix on each line; render a single "Avg" column header instead.
+  const rightMargin = isMobile ? 50 : 140;
+  const leftMargin = isMobile ? 0 : 12;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="mb-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
-        {title}
-      </h3>
+    <div className="rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-2">
+      <div className="relative mb-2 flex items-baseline justify-between">
+        <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+          {title}
+        </h3>
+        {isMobile && (
+          <span
+            className="text-xs font-medium text-zinc-500"
+            style={{ marginRight: 2 }}
+          >
+            Avg
+          </span>
+        )}
+      </div>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 140, bottom: 8, left: 12 }} barCategoryGap="18%">
+          <BarChart data={data} margin={{ top: 8, right: rightMargin, bottom: 8, left: leftMargin }} barCategoryGap="18%">
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="day" tick={{ fontSize: 11 }} interval={0} />
+            <XAxis
+              dataKey="day"
+              tick={{ fontSize: 11 }}
+              interval={0}
+              tickFormatter={isMobile ? (d: string) => String(Number(d)) : undefined}
+            />
             <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatMoney(v)} width={80} />
             <Tooltip content={<OrderedTooltip titlePrefix={`${monthFullName} `} useDayNum />} />
             <Legend wrapperStyle={{ fontSize: 12 }} content={() => <OrderedLegend />} />
@@ -90,13 +111,13 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
               y={avgGross}
               stroke="#999999"
               strokeDasharray="4 4"
-              label={<AvgLabel value={avgGross} color="#999999" />}
+              label={<AvgLabel value={avgGross} color="#999999" hideSuffix={isMobile} />}
             />
             <ReferenceLine
               y={avgNet}
               stroke="#015c40"
               strokeDasharray="4 4"
-              label={<AvgLabel value={avgNet} color="#015c40" />}
+              label={<AvgLabel value={avgNet} color="#015c40" hideSuffix={isMobile} />}
             />
             {/* Legend & stacking order: Net first (bottom), Gross on top of it, Loss last. */}
             <Bar dataKey="winNet" stackId="day" fill="#047857" name="Net" />
@@ -217,10 +238,12 @@ function AvgLabel({
   value,
   color,
   viewBox,
+  hideSuffix = false,
 }: {
   value: number;
   color: string;
   viewBox?: { x?: number; y?: number; width?: number; height?: number };
+  hideSuffix?: boolean;
 }) {
   if (!viewBox) return null;
   const x = (viewBox.x ?? 0) + (viewBox.width ?? 0) + 8;
@@ -228,8 +251,10 @@ function AvgLabel({
   return (
     <g>
       <text x={x} y={y} dy={5} fill={color} style={{ fontVariantNumeric: "tabular-nums" }}>
-        <tspan fontSize={19} fontWeight={700}>{formatMoney(value)}</tspan>
-        <tspan fontSize={15} fontWeight={400} dx={4}>Avg</tspan>
+        <tspan fontSize={hideSuffix ? 14 : 19} fontWeight={700}>{formatMoney(value)}</tspan>
+        {!hideSuffix && (
+          <tspan fontSize={15} fontWeight={400} dx={4}>Avg</tspan>
+        )}
       </text>
     </g>
   );

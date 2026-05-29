@@ -13,7 +13,16 @@ import {
 } from "recharts";
 
 import { formatMoney, formatSignedPercent } from "@/lib/format";
+import { useIsMobile } from "@/lib/useIsMobile";
 import type { AnnualBarPoint } from "@/lib/types";
+
+function formatMoneyK(v: number): string {
+  if (v === 0) return "$0";
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  return `${sign}$${Math.round(abs / 1000)}k`;
+}
 
 interface Props {
   bars: AnnualBarPoint[];
@@ -70,18 +79,33 @@ export default function AnnualBarsChart({ bars, avgGrossPl, avgNetPl, year }: Pr
   const avgGross = Number(avgGrossPl);
   const avgNet = Number(avgNetPl);
   const title = `Annual ${year} Performance`;
+  const isMobile = useIsMobile();
+  const rightMargin = isMobile ? 50 : 140;
+  const leftMargin = isMobile ? 0 : 12;
+  const yAxisWidth = isMobile ? 50 : 80;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="mb-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
-        {title}
-      </h3>
+      <div className="relative mb-2 flex items-baseline justify-between">
+        <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+          {title}
+        </h3>
+        {isMobile && (
+          <span className="text-xs font-medium text-zinc-500" style={{ marginRight: 2 }}>
+            Avg
+          </span>
+        )}
+      </div>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 140, bottom: 8, left: 12 }} barCategoryGap="14%">
+          <BarChart data={data} margin={{ top: 8, right: rightMargin, bottom: 8, left: leftMargin }} barCategoryGap="14%">
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="month" tick={{ fontSize: 11 }} interval={0} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatMoney(v)} width={80} />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              tickFormatter={(v: number) => (isMobile ? formatMoneyK(v) : formatMoney(v))}
+              width={yAxisWidth}
+            />
             <Tooltip content={<OrderedTooltip year={year} />} />
             <Legend wrapperStyle={{ fontSize: 12 }} content={() => <OrderedLegend />} />
             <ReferenceLine y={0} stroke="#9ca3af" />
@@ -89,13 +113,13 @@ export default function AnnualBarsChart({ bars, avgGrossPl, avgNetPl, year }: Pr
               y={avgGross}
               stroke="#999999"
               strokeDasharray="4 4"
-              label={<AvgLabel value={avgGross} color="#999999" />}
+              label={<AvgLabel value={avgGross} color="#999999" hideSuffix={isMobile} />}
             />
             <ReferenceLine
               y={avgNet}
               stroke="#015c40"
               strokeDasharray="4 4"
-              label={<AvgLabel value={avgNet} color="#015c40" />}
+              label={<AvgLabel value={avgNet} color="#015c40" hideSuffix={isMobile} />}
             />
             <Bar dataKey="winNet" stackId="month" fill="#047857" name="Net" />
             <Bar dataKey="winFee" stackId="month" fill="#6ee7b7" name="Gross" />
@@ -193,10 +217,12 @@ function AvgLabel({
   value,
   color,
   viewBox,
+  hideSuffix = false,
 }: {
   value: number;
   color: string;
   viewBox?: { x?: number; y?: number; width?: number; height?: number };
+  hideSuffix?: boolean;
 }) {
   if (!viewBox) return null;
   const x = (viewBox.x ?? 0) + (viewBox.width ?? 0) + 8;
@@ -204,8 +230,10 @@ function AvgLabel({
   return (
     <g>
       <text x={x} y={y} dy={5} fill={color} style={{ fontVariantNumeric: "tabular-nums" }}>
-        <tspan fontSize={19} fontWeight={700}>{formatMoney(value)}</tspan>
-        <tspan fontSize={15} fontWeight={400} dx={4}>Avg</tspan>
+        <tspan fontSize={hideSuffix ? 14 : 19} fontWeight={700}>{formatMoney(value)}</tspan>
+        {!hideSuffix && (
+          <tspan fontSize={15} fontWeight={400} dx={4}>Avg</tspan>
+        )}
       </text>
     </g>
   );

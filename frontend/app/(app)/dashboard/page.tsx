@@ -24,17 +24,16 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <div className="text-right">
-          <p className="text-xs uppercase tracking-wide text-zinc-500">Current balance</p>
-          <p className="text-xl font-semibold tabular-nums">
-            {formatMoney(snapshot.currentBalance)}
-          </p>
-          <p className="text-xs text-zinc-500">
-            deployed {formatMoney(snapshot.deployedCapital)}
-          </p>
-        </div>
+      <header className="flex items-baseline justify-between gap-3">
+        <h1 className="hidden text-2xl font-semibold tracking-tight sm:block">Dashboard</h1>
+        <p className="ml-auto text-sm font-medium tabular-nums sm:text-base">
+          Current Balance:{" "}
+          <span className="font-semibold">{formatMoney(snapshot.currentBalance)}</span>
+          {", "}Total Net Gain:{" "}
+          <span className="font-semibold">
+            {formatMoney(Number(snapshot.currentBalance) - Number(snapshot.deployedCapital))}
+          </span>
+        </p>
       </header>
 
       {/* Top row: 3 parallel tiles — Daily / Monthly / Yearly.

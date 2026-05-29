@@ -15,7 +15,16 @@ import {
 } from "recharts";
 
 import { formatMoney, formatShortDate } from "@/lib/format";
+import { useIsMobile } from "@/lib/useIsMobile";
 import type { BalancePoint, CapitalChangePoint } from "@/lib/types";
+
+function formatMoneyK(v: number): string {
+  if (v === 0) return "$0";
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  return `${sign}$${Math.round(abs / 1000)}k`;
+}
 
 interface Props {
   series: BalancePoint[];
@@ -32,6 +41,7 @@ const MONTH_ABBR = [
 
 export default function BalanceLineChart({ series, capitalChanges, currentYear }: Props) {
   const [view, setView] = useState<View>("year");
+  const isMobile = useIsMobile();
 
   if (series.length === 0) {
     return (
@@ -160,9 +170,9 @@ export default function BalanceLineChart({ series, capitalChanges, currentYear }
               interval={0}
             />
             <YAxis
-              tickFormatter={(v: number) => formatMoney(v)}
+              tickFormatter={(v: number) => (isMobile ? formatMoneyK(v) : formatMoney(v))}
               tick={{ fontSize: 11 }}
-              width={80}
+              width={isMobile ? 50 : 80}
             />
             <Tooltip
               formatter={(value) => formatMoney(Number(value))}
