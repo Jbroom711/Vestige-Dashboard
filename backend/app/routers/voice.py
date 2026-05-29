@@ -146,9 +146,60 @@ def _compute_projections(
     else:
         year_avg_gross_rate = year_avg_net_rate = ZERO
 
-    ytd_fee_results = compute_monthly_fees(ytd_states, commission_rate)
-    ytd_fees = sum((f.auto_amount for f in ytd_fee_results), ZERO)
-    ytd_net = ytd_gross - ytd_fees
+    # Effective fees = manual override if present, else auto. Matches the
+    # dashboard exactly so spoken numbers and visible numbers agree (e.g.
+    # December 2025's fee was waived with manual_amount=0 and the broker
+    # bundled it into January's actual charge).
+    user_row = (
+        service_client()
+        .table("profiles")
+        .select("id")
+        .eq("role", "admin")
+        .eq("status", "approved")
+        .order("created_at")
+        .limit(1)
+        .execute()
+        .data
+    )
+    user_id_for_fees = user_row[0]["id"] if user_row else None
+    fee_rows = (
+        service_client()
+        .table("monthly_fees")
+        .select("year, month, auto_amount, manual_amount")
+        .eq("user_id", user_id_for_fees)
+        .execute()
+    ).data or []
+    effective_fee_by_ym: dict[tuple[int, int], Decimal] = {}
+    for r in fee_rows:
+        eff = (
+            Decimal(str(r["manual_amount"]))
+            if r["manual_amount"] is not None
+            else Decimal(str(r["auto_amount"]))
+        )
+        effective_fee_by_ym[(r["year"], r["month"])] = eff
+
+    ytd_total_fee = ZERO
+    months_in_ytd = sorted({(s.date.year, s.date.month) for s in ytd_states})
+    current_ym = (as_of.year, as_of.month)
+    # Running carryforward-aware accrual for the current (not-yet-closed) month.
+    mtd_states = [s for s in ytd_states if (s.date.year, s.date.month) == current_ym]
+    mtd_gross_for_fee = sum((s.gross_pl for s in mtd_states), ZERO)
+    accrued_fee = (
+        mtd_gross_for_fee * commission_rate if mtd_gross_for_fee > 0 else ZERO
+    )
+    for ym in months_in_ytd:
+        if ym == current_ym:
+            ytd_total_fee += accrued_fee
+        elif ym in effective_fee_by_ym:
+            ytd_total_fee += effective_fee_by_ym[ym]
+        else:
+            month_states_for_ym = [
+                s for s in ytd_states if (s.date.year, s.date.month) == ym
+            ]
+            month_gross = sum((s.gross_pl for s in month_states_for_ym), ZERO)
+            if month_gross > 0:
+                ytd_total_fee += month_gross * commission_rate
+    ytd_net = ytd_gross - ytd_total_fee
 
     hist_nyse_total = len(trading_days_between(min(s.date for s in states), as_of))
     active_count_total = sum(1 for s in states if s.gross_pl != 0)
