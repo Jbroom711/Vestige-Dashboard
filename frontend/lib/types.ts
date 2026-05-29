@@ -143,12 +143,29 @@ export interface DailyBarPoint {
   grossPl: MoneyStr;
   feePortion: MoneyStr;
   netPl: MoneyStr;
+  grossPct: PctStr;
+  netPct: PctStr;
+}
+
+export interface AnnualBarPoint {
+  month: number;
+  grossPl: MoneyStr;
+  feePortion: MoneyStr;
+  netPl: MoneyStr;
+  grossPct: PctStr;
+  netPct: PctStr;
 }
 
 export interface BalancePoint {
   date: string;
   closingBalance: MoneyStr;
   deployedCapital: MoneyStr;
+}
+
+export interface CapitalChangePoint {
+  date: string;
+  amount: MoneyStr;
+  type: "addition" | "withdrawal";
 }
 
 export interface AnnualProjectionTileData {
@@ -173,7 +190,11 @@ export interface DashboardSnapshot {
   monthlyBars: DailyBarPoint[];
   monthlyAvgGrossPl: MoneyStr;
   monthlyAvgNetPl: MoneyStr;
+  annualBars: AnnualBarPoint[];
+  annualAvgGrossPl: MoneyStr;
+  annualAvgNetPl: MoneyStr;
   allTimeAvgGrossPl: MoneyStr;
   allTimeAvgNetPl: MoneyStr;
   balanceSeries: BalancePoint[];
+  capitalChanges: CapitalChangePoint[];
 }

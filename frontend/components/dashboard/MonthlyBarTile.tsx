@@ -1,8 +1,7 @@
-import { formatSignedMoney, formatSignedPercent, monthName } from "@/lib/format";
+import { formatMoney, formatSignedPercent, monthName } from "@/lib/format";
 import type { MonthTile } from "@/lib/types";
 
 const BAR_HEIGHT_PX = 280;
-const HEADER_PX = 36; // space above the bar/column for "MTD / Full (E)" labels
 
 /**
  * Monthly tile. Bar = projected full-month gross. The right side is a single
@@ -27,24 +26,24 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
         </p>
       </header>
 
-      <div className="mt-auto flex items-end justify-center gap-5">
+      <div className="mt-auto flex items-end justify-center gap-[11px]">
         {/* --- The projection bar (no header, just the bar) --- */}
-        <div className="relative" style={{ height: BAR_HEIGHT_PX, width: 140 }}>
+        <div className="relative shrink-0" style={{ height: BAR_HEIGHT_PX, width: 120 }}>
           <div
             className="absolute bottom-0 left-0 flex w-full flex-col overflow-hidden rounded-lg shadow-inner"
             style={{ height: BAR_HEIGHT_PX }}
           >
             {positive ? (
               <>
-                <div className="flex flex-[2] flex-col items-center justify-center bg-emerald-300 dark:bg-emerald-400">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-black/60">
+                <div className="flex flex-[2] flex-col items-center justify-start bg-emerald-300 pt-2 dark:bg-emerald-400">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-[#666666]">
                     Gross
                   </span>
-                  <span className="text-3xl font-bold tabular-nums text-black">
+                  <span className="text-3xl font-bold tabular-nums text-[#666666]">
                     {formatSignedPercent(projGrossPct, 2)}
                   </span>
                 </div>
-                <div className="flex flex-[3] flex-col items-center justify-center bg-emerald-700 dark:bg-emerald-600">
+                <div className="flex flex-[3] flex-col items-center justify-start bg-emerald-700 pt-2 dark:bg-emerald-600">
                   <span className="text-[11px] font-medium uppercase tracking-wide text-white/80">
                     Net
                   </span>
@@ -54,7 +53,7 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
                 </div>
               </>
             ) : (
-              <div className="flex flex-1 flex-col items-center justify-center bg-zinc-200 dark:bg-zinc-700">
+              <div className="flex flex-1 flex-col items-center justify-start bg-zinc-200 pt-2 dark:bg-zinc-700">
                 <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
                   No projection
                 </span>
@@ -90,38 +89,43 @@ function DollarColumn({
   fullNet: number;
 }) {
   return (
-    <div className="flex w-36 flex-col" style={{ height: BAR_HEIGHT_PX + HEADER_PX }}>
-      {/* Header labels: stacked, MTD black/bold + Full (E) grey/bold */}
-      <div className="flex-none pb-1" style={{ height: HEADER_PX }}>
-        <p className="text-xs font-bold leading-tight text-zinc-900 dark:text-zinc-100">MTD</p>
-        <p className="text-xs font-bold leading-tight text-zinc-500">Full (E)</p>
-      </div>
-      {/* Values, with the bar's 2/3 vertical split */}
-      <div className="flex flex-1 flex-col">
-        <DollarPair flex={2} mtd={mtdGross} full={fullGross} />
-        <DollarPair flex={3} mtd={mtdNet} full={fullNet} />
-      </div>
+    <div className="flex flex-col" style={{ height: BAR_HEIGHT_PX }}>
+      <DollarPair flex={2} mtd={mtdGross} full={fullGross} tone="gross" />
+      <DollarPair flex={3} mtd={mtdNet} full={fullNet} tone="net" />
     </div>
   );
 }
 
-function DollarPair({ flex, mtd, full }: { flex: number; mtd: number; full: number }) {
-  const mtdTone =
-    mtd > 0
-      ? "text-emerald-700 dark:text-emerald-400"
-      : mtd < 0
-        ? "text-red-700 dark:text-red-400"
-        : "text-zinc-700 dark:text-zinc-300";
+function DollarPair({
+  flex,
+  mtd,
+  full,
+  tone,
+}: {
+  flex: number;
+  mtd: number;
+  full: number;
+  tone: "gross" | "net";
+}) {
+  const color =
+    tone === "gross"
+      ? "text-[#999999]"
+      : "text-[#015c40]";
   return (
     <div
-      className="flex flex-col items-start justify-center gap-0.5"
+      className="flex flex-col items-start justify-start pt-2"
       style={{ flex }}
     >
-      <span className={`text-sm font-semibold tabular-nums ${mtdTone}`}>
-        {formatSignedMoney(mtd)}
+      {/* Invisible spacer mirrors the "Gross"/"Net" label inside the bar so the
+          E value's baseline aligns with the % amount's baseline. */}
+      <span className="invisible text-[11px] font-medium uppercase tracking-wide">
+        .
       </span>
-      <span className="text-xl font-semibold tabular-nums text-zinc-500">
-        {formatSignedMoney(full)} <span className="text-xl font-medium">E</span>
+      <span className={`whitespace-nowrap text-3xl font-bold tabular-nums ${color}`}>
+        {formatMoney(full)} <span className="text-xl font-bold">E</span>
+      </span>
+      <span className={`mt-1 text-base font-normal tabular-nums ${color}`}>
+        {formatMoney(mtd)} <span className="text-sm font-normal">MTD</span>
       </span>
     </div>
   );

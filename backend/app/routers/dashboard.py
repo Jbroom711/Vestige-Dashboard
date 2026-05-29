@@ -17,10 +17,12 @@ from app.calc import (
     project_year_with_plans,
 )
 from app.db import service_client
-from app.holidays import prev_trading_day, trading_days_between
+from app.holidays import is_trading_day, prev_trading_day, trading_days_between
 from app.schemas import (
+    AnnualBarPoint,
     AnnualProjectionTile,
     BalancePoint,
+    CapitalChangePoint,
     DailyBarPoint,
     DailyTile,
     DashboardSnapshot,
@@ -487,17 +489,42 @@ def snapshot(
     planned_changes_out = [PlannedCapitalChangeOut(**r) for r in planned_rows]
 
     # ---- monthly bars ----------------------------------------------------
+    # Build a full skeleton of every trading day in the current month so the
+    # chart's x-axis shows all 20-ish ticks. Elapsed days carry real data;
+    # non-elapsed days carry zeros (rendered as no-bar but the tick remains).
+    state_by_date = {s.date: s for s in mtd_states}
+    last_dom = (date(as_of.year, as_of.month, 28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
     monthly_bars: list[DailyBarPoint] = []
-    for s in mtd_states:
-        net = daily_net(s.gross_pl)
-        monthly_bars.append(
-            DailyBarPoint(
-                date=s.date,
-                gross_pl=s.gross_pl,
-                fee_portion=s.gross_pl - net,
-                net_pl=net,
-            )
-        )
+    cur = date(as_of.year, as_of.month, 1)
+    while cur <= last_dom:
+        if is_trading_day(cur):
+            if cur in state_by_date:
+                s = state_by_date[cur]
+                net = daily_net(s.gross_pl)
+                gross_pct = s.gross_pl / s.prior_balance if s.prior_balance > 0 else ZERO
+                net_pct = net / s.prior_balance if s.prior_balance > 0 else ZERO
+                monthly_bars.append(
+                    DailyBarPoint(
+                        date=s.date,
+                        gross_pl=s.gross_pl,
+                        fee_portion=s.gross_pl - net,
+                        net_pl=net,
+                        gross_pct=gross_pct,
+                        net_pct=net_pct,
+                    )
+                )
+            else:
+                monthly_bars.append(
+                    DailyBarPoint(
+                        date=cur,
+                        gross_pl=ZERO,
+                        fee_portion=ZERO,
+                        net_pl=ZERO,
+                        gross_pct=ZERO,
+                        net_pct=ZERO,
+                    )
+                )
+        cur += timedelta(days=1)
 
     if mtd_states:
         avg_gross_pl_dollar = sum((s.gross_pl for s in mtd_states), ZERO) / Decimal(len(mtd_states))
@@ -507,6 +534,68 @@ def snapshot(
     else:
         avg_gross_pl_dollar = ZERO
         avg_net_pl_dollar = ZERO
+
+    # ---- annual bars (Jan-Dec aggregate by month) ------------------------
+    monthly_gross_totals: dict[int, Decimal] = {}
+    monthly_net_totals: dict[int, Decimal] = {}
+    for s in states:
+        if s.date.year != as_of.year:
+            continue
+        m_key = s.date.month
+        monthly_gross_totals[m_key] = monthly_gross_totals.get(m_key, ZERO) + s.gross_pl
+        monthly_net_totals[m_key] = monthly_net_totals.get(m_key, ZERO) + daily_net(s.gross_pl)
+
+    # Balance at the start of each month in the current year (for per-month %).
+    def balance_at_month_start(month: int) -> Decimal:
+        first_of_month = date(as_of.year, month, 1)
+        before = [s for s in states if s.date < first_of_month]
+        if before:
+            return before[-1].closing_balance
+        return starting
+
+    annual_bars: list[AnnualBarPoint] = []
+    for m in range(1, 13):
+        base = balance_at_month_start(m)
+        if m == as_of.month and m in monthly_gross_totals:
+            gross = month_proj_gross
+            net = month_proj_net
+            gpct = gross / base if base > 0 else ZERO
+            npct = net / base if base > 0 else ZERO
+            annual_bars.append(
+                AnnualBarPoint(
+                    month=m, gross_pl=gross, fee_portion=gross - net, net_pl=net,
+                    gross_pct=gpct, net_pct=npct,
+                )
+            )
+        elif m in monthly_gross_totals:
+            gross = monthly_gross_totals[m]
+            net = monthly_net_totals[m]
+            gpct = gross / base if base > 0 else ZERO
+            npct = net / base if base > 0 else ZERO
+            annual_bars.append(
+                AnnualBarPoint(
+                    month=m, gross_pl=gross, fee_portion=gross - net, net_pl=net,
+                    gross_pct=gpct, net_pct=npct,
+                )
+            )
+        else:
+            annual_bars.append(
+                AnnualBarPoint(
+                    month=m, gross_pl=ZERO, fee_portion=ZERO, net_pl=ZERO,
+                    gross_pct=ZERO, net_pct=ZERO,
+                )
+            )
+
+    # Averages derive from the bars actually drawn (so the projected E for the
+    # current month contributes to the dashed reference line too).
+    populated = [b for b in annual_bars if b.gross_pl != ZERO or b.net_pl != ZERO]
+    if populated:
+        n_elapsed = Decimal(len(populated))
+        annual_avg_gross_pl = sum((b.gross_pl for b in populated), ZERO) / n_elapsed
+        annual_avg_net_pl = sum((b.net_pl for b in populated), ZERO) / n_elapsed
+    else:
+        annual_avg_gross_pl = ZERO
+        annual_avg_net_pl = ZERO
 
     # All-time averages over active trading days (matches the platform's
     # "Avg profit per day" stat).
@@ -551,9 +640,16 @@ def snapshot(
         monthly_bars=monthly_bars,
         monthly_avg_gross_pl=avg_gross_pl_dollar,
         monthly_avg_net_pl=avg_net_pl_dollar,
+        annual_bars=annual_bars,
+        annual_avg_gross_pl=annual_avg_gross_pl,
+        annual_avg_net_pl=annual_avg_net_pl,
         all_time_avg_gross_pl=all_time_avg_gross,
         all_time_avg_net_pl=all_time_avg_net,
         balance_series=balance_series,
+        capital_changes=[
+            CapitalChangePoint(date=c.date, amount=c.amount, type=c.type)
+            for c in sorted_caps
+        ],
     )
 
 

@@ -223,17 +223,39 @@ class YearTile(BaseModel):
 
 
 class DailyBarPoint(BaseModel):
-    """One bar in the month-of-day chart."""
+    """One bar in the month-of-day chart. For trading days that haven't
+    elapsed yet, all fields are 0 (rendered as no-bar but the x-axis
+    tick is still drawn)."""
     date: date
     gross_pl: Decimal
     fee_portion: Decimal                      # gross - net (0 on losing days)
     net_pl: Decimal
+    gross_pct: Decimal                        # gross_pl / prior_balance
+    net_pct: Decimal                          # net_pl / prior_balance
+
+
+class AnnualBarPoint(BaseModel):
+    """One bar in the year-by-month chart. For months that haven't started
+    yet, all fields are 0."""
+    month: int                                # 1-12
+    gross_pl: Decimal
+    fee_portion: Decimal
+    net_pl: Decimal
+    gross_pct: Decimal                        # month_gross / balance_at_month_start
+    net_pct: Decimal                          # month_net / balance_at_month_start
 
 
 class BalancePoint(BaseModel):
     date: date
     closing_balance: Decimal
     deployed_capital: Decimal
+
+
+class CapitalChangePoint(BaseModel):
+    """Capital deposit or withdrawal annotation for the Overview chart."""
+    date: date
+    amount: Decimal
+    type: Literal["addition", "withdrawal"]
 
 
 class AnnualProjectionTile(BaseModel):
@@ -260,9 +282,13 @@ class DashboardSnapshot(BaseModel):
     year: YearTile
     annual_projection: AnnualProjectionTile
     planned_changes: list[PlannedCapitalChangeOut]  # so the Annual tile can render the form
-    monthly_bars: list[DailyBarPoint]         # current-month days, oldest first
-    monthly_avg_gross_pl: Decimal             # for the bar-chart trendline ($ avg)
+    monthly_bars: list[DailyBarPoint]         # current-month days, padded with zeros for non-elapsed trading days
+    monthly_avg_gross_pl: Decimal             # for the bar-chart trendline ($ avg) — elapsed days only
     monthly_avg_net_pl: Decimal
+    annual_bars: list[AnnualBarPoint]         # 12 entries (Jan-Dec); zeros for non-elapsed months
+    annual_avg_gross_pl: Decimal              # avg monthly gross across elapsed months
+    annual_avg_net_pl: Decimal
     all_time_avg_gross_pl: Decimal            # for the daily-tile reference line
     all_time_avg_net_pl: Decimal
     balance_series: list[BalancePoint]        # all-time, oldest first
+    capital_changes: list[CapitalChangePoint] # historical deposits/withdrawals, oldest first

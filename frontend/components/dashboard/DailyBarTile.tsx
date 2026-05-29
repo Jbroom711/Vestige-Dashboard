@@ -1,20 +1,25 @@
-import { formatDateWithWeekday, formatSignedMoney, formatSignedPercent } from "@/lib/format";
+import { formatDateWithWeekday, formatMoney, formatSignedPercent } from "@/lib/format";
 import type { DailyTile, MoneyStr } from "@/lib/types";
 
 const BAR_HEIGHT_PX = 280;
-const HEADROOM_PX = 90;
-const CONTAINER_HEIGHT_PX = BAR_HEIGHT_PX + HEADROOM_PX;
-const TOP_SEGMENT_FRACTION = 2 / 5;     // 40% (fee/gross-label zone)
-const BOTTOM_SEGMENT_FRACTION = 3 / 5;  // 60% (net zone)
-const TOP_SEGMENT_PX = BAR_HEIGHT_PX * TOP_SEGMENT_FRACTION;
-const BOTTOM_SEGMENT_PX = BAR_HEIGHT_PX * BOTTOM_SEGMENT_FRACTION;
+const MAIN_BAR_WIDTH_PX = 120;          // matches Monthly/Yearly main bar
+const NARROW_BAR_WIDTH_PX = 12;         // ~10% of main bar
+const BAR_GAP_PX = 4;
 
 /**
- * Daily tile. Stacked bar with the percentage inside each segment and dollar
- * amounts to the right. Two thick-dashed reference lines:
- *   - gross-zone (top 40% of bar): gray, anchored at avg_gross_$ / today_gross_$
- *   - net-zone (bottom 60% of bar): white, anchored at avg_net_$ / today_net_$
- * Lines float above the bar when today is below the corresponding average.
+ * Daily tile. Two side-by-side bottom-aligned bars:
+ *   - Narrow bar on the left = historical *average* daily gross. Same 40/60
+ *     emerald split as the main bar, no text — just shading.
+ *   - Wide main bar on the right = today's actual gross. Same 40/60 split,
+ *     with the % gain printed inside each segment (top-aligned).
+ *
+ * Both bars share the same px-per-dollar so they're directly comparable. If
+ * today > avg the main bar is taller; if today < avg the narrow bar is.
+ *
+ * Loss days: main bar turns red, single segment, still bottom-anchored.
+ *
+ * Right column mirrors Monthly/Yearly: header row ("Today" / "Avg") above
+ * a two-row stack of $ values aligned to the bar's 40/60 split.
  */
 export default function DailyBarTile({
   data,
@@ -35,8 +40,16 @@ export default function DailyBarTile({
 
   const gross = Number(data.grossPl);
   const net = Number(data.netPl);
+  const avgGrossN = Number(avgGross);
+  const avgNetN = Number(avgNet);
   const positive = gross > 0;
   const negative = gross < 0;
+
+  // Shared px-per-dollar scale so the two bars are directly comparable.
+  const scaleMax = Math.max(Math.abs(gross), Math.abs(avgGrossN), 1);
+  const pxPerDollar = BAR_HEIGHT_PX / scaleMax;
+  const mainBarHeight = Math.max(2, Math.abs(gross) * pxPerDollar);
+  const narrowBarHeight = avgGrossN > 0 ? Math.max(2, avgGrossN * pxPerDollar) : 0;
 
   return (
     <div className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -46,24 +59,45 @@ export default function DailyBarTile({
         </h2>
       </header>
 
-      <div className="mt-auto flex items-end justify-center gap-5">
-        {/* --- Bar container with headroom for avg lines --- */}
-        <div className="relative" style={{ height: CONTAINER_HEIGHT_PX, width: 160 }}>
+      <div className="mt-auto flex items-end justify-center gap-[11px]">
+        {/* --- Bars: narrow avg + main, both bottom-anchored --- */}
+        <div
+          className="flex shrink-0 items-end"
+          style={{
+            height: BAR_HEIGHT_PX,
+            width: NARROW_BAR_WIDTH_PX + BAR_GAP_PX + MAIN_BAR_WIDTH_PX,
+            gap: BAR_GAP_PX,
+          }}
+        >
+          {/* Narrow avg bar */}
+          <div style={{ width: NARROW_BAR_WIDTH_PX, height: narrowBarHeight }}>
+            {narrowBarHeight > 0 && (
+              <div
+                className="flex h-full w-full flex-col overflow-hidden rounded-sm shadow-inner"
+                title={`Avg gross ${formatMoney(avgGrossN)} · Avg net ${formatMoney(avgNetN)}`}
+              >
+                <div className="flex-[2] bg-emerald-300 dark:bg-emerald-400" />
+                <div className="flex-[3] bg-emerald-700 dark:bg-emerald-600" />
+              </div>
+            )}
+          </div>
+
+          {/* Main bar */}
           <div
-            className="absolute bottom-0 left-0 flex w-full flex-col overflow-hidden rounded-lg shadow-inner"
-            style={{ height: BAR_HEIGHT_PX }}
+            className="flex flex-col overflow-hidden rounded-lg shadow-inner"
+            style={{ width: MAIN_BAR_WIDTH_PX, height: mainBarHeight }}
           >
             {positive ? (
               <>
-                <div className="flex flex-[2] flex-col items-center justify-center bg-emerald-300 dark:bg-emerald-400">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-black/60">
+                <div className="flex flex-[2] flex-col items-center justify-start bg-emerald-300 pt-2 dark:bg-emerald-400">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-[#666666]">
                     Gross
                   </span>
-                  <span className="text-3xl font-bold tabular-nums text-black">
+                  <span className="text-3xl font-bold tabular-nums text-[#666666]">
                     {formatSignedPercent(data.grossPct, 2)}
                   </span>
                 </div>
-                <div className="flex flex-[3] flex-col items-center justify-center bg-emerald-700 dark:bg-emerald-600">
+                <div className="flex flex-[3] flex-col items-center justify-start bg-emerald-700 pt-2 dark:bg-emerald-600">
                   <span className="text-[11px] font-medium uppercase tracking-wide text-white/80">
                     Net
                   </span>
@@ -73,16 +107,16 @@ export default function DailyBarTile({
                 </div>
               </>
             ) : negative ? (
-              <div className="flex flex-1 flex-col items-center justify-center bg-red-600 dark:bg-red-700">
+              <div className="flex flex-1 flex-col items-center justify-start bg-red-600 pt-2 dark:bg-red-700">
                 <span className="text-[11px] font-medium uppercase tracking-wide text-white/80">
                   Loss
                 </span>
                 <span className="text-3xl font-bold tabular-nums text-white">
-                  {formatSignedPercent(data.grossPct, 3)}
+                  {formatSignedPercent(data.grossPct, 2)}
                 </span>
               </div>
             ) : (
-              <div className="flex flex-1 flex-col items-center justify-center bg-zinc-200 dark:bg-zinc-700">
+              <div className="flex flex-1 flex-col items-center justify-start bg-zinc-200 pt-2 dark:bg-zinc-700">
                 <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
                   No change
                 </span>
@@ -92,40 +126,24 @@ export default function DailyBarTile({
               </div>
             )}
           </div>
-
-          {/* Gross reference line — gray, in the fee/top zone */}
-          <AvgLineWithLabel
-            todayDollar={gross}
-            avgDollar={Number(avgGross)}
-            sectionHeightPx={BAR_HEIGHT_PX}
-            baseOffsetPx={0}
-            colorClass="border-zinc-500 dark:border-zinc-300"
-            labelText={`avg ${formatMoneyShort(Number(avgGross))}`}
-            labelTone="text-zinc-600 dark:text-zinc-300"
-          />
-          {/* Net reference line — white, in the bottom net zone */}
-          <AvgLineWithLabel
-            todayDollar={net}
-            avgDollar={Number(avgNet)}
-            sectionHeightPx={BOTTOM_SEGMENT_PX}
-            baseOffsetPx={0}
-            colorClass="border-white"
-            labelText={`avg ${formatMoneyShort(Number(avgNet))}`}
-            labelTone="text-zinc-600 dark:text-zinc-300"
-          />
         </div>
 
-        {/* --- Right column: $ amounts at matching segment heights --- */}
-        <div className="flex w-40 flex-col" style={{ height: BAR_HEIGHT_PX }}>
+        {/* --- Right column: Today $ only, one row per bar segment.
+              No fixed width — column sizes to its widest text so there's
+              no trailing whitespace inside it. --- */}
+        <div
+          className="flex flex-col"
+          style={{ height: mainBarHeight }}
+        >
           {positive ? (
             <>
-              <DollarLine flex={2} amount={gross} />
-              <DollarLine flex={3} amount={net} />
+              <DollarRow flex={2} amount={gross} tone="gross" />
+              <DollarRow flex={3} amount={net} tone="net" />
             </>
           ) : negative ? (
-            <DollarLine flex={1} amount={gross} />
+            <DollarRow flex={1} amount={gross} tone="loss" />
           ) : (
-            <div className="flex flex-1 items-center justify-start text-xs text-zinc-400">$0</div>
+            <DollarRow flex={1} amount={0} tone="net" />
           )}
         </div>
       </div>
@@ -133,63 +151,31 @@ export default function DailyBarTile({
   );
 }
 
-function AvgLineWithLabel({
-  todayDollar,
-  avgDollar,
-  sectionHeightPx,
-  baseOffsetPx,
-  colorClass,
-  labelText,
-  labelTone,
+function DollarRow({
+  flex,
+  amount,
+  tone,
 }: {
-  todayDollar: number;
-  avgDollar: number;
-  sectionHeightPx: number;
-  baseOffsetPx: number;
-  colorClass: string;
-  labelText: string;
-  labelTone: string;
+  flex: number;
+  amount: number;
+  tone: "gross" | "net" | "loss";
 }) {
-  if (todayDollar <= 0 || avgDollar <= 0) return null;
-  const ratio = avgDollar / todayDollar;
-  const linePx = baseOffsetPx + Math.min(CONTAINER_HEIGHT_PX - 6, ratio * sectionHeightPx);
-
-  return (
-    <>
-      <div
-        className={`pointer-events-none absolute left-0 w-full border-t-4 border-dashed ${colorClass}`}
-        style={{ bottom: linePx }}
-      />
-      <div
-        className={`pointer-events-none absolute left-full ml-2 translate-y-1/2 whitespace-nowrap text-[11px] font-medium ${labelTone}`}
-        style={{ bottom: linePx }}
-      >
-        {labelText}
-      </div>
-    </>
-  );
-}
-
-function DollarLine({ flex, amount }: { flex: number; amount: number }) {
-  const tone =
-    amount > 0
-      ? "text-emerald-700 dark:text-emerald-400"
-      : amount < 0
+  const color =
+    tone === "gross"
+      ? "text-[#999999]"
+      : tone === "loss"
         ? "text-red-700 dark:text-red-400"
-        : "text-zinc-600 dark:text-zinc-300";
+        : "text-[#015c40]";
   return (
-    <div className="flex flex-col items-start justify-center" style={{ flex }}>
-      <span className={`text-xl font-semibold tabular-nums ${tone}`}>
-        {formatSignedMoney(amount)}
+    <div className="flex flex-col items-start justify-start pt-2" style={{ flex }}>
+      {/* Invisible spacer mirrors the "Gross"/"Net" label inside the bar so the
+          $ amount's baseline aligns with the % amount's baseline. */}
+      <span className="invisible text-[11px] font-medium uppercase tracking-wide">
+        .
+      </span>
+      <span className={`text-3xl font-bold tabular-nums ${color}`}>
+        {formatMoney(amount)}
       </span>
     </div>
   );
-}
-
-function formatMoneyShort(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
 }

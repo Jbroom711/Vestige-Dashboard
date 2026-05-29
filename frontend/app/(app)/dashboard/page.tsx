@@ -1,9 +1,9 @@
+import AnnualBarsChart from "@/components/dashboard/AnnualBarsChart";
 import AnnualProjectionTile from "@/components/dashboard/AnnualProjectionTile";
 import BalanceLineChart from "@/components/dashboard/BalanceLineChart";
 import DailyBarTile from "@/components/dashboard/DailyBarTile";
 import DailyBarsChart from "@/components/dashboard/DailyBarsChart";
 import MonthlyBarTile from "@/components/dashboard/MonthlyBarTile";
-import Section from "@/components/dashboard/Section";
 import YearlyBarTile from "@/components/dashboard/YearlyBarTile";
 import { ApiError, apiServer } from "@/lib/api.server";
 import { formatMoney } from "@/lib/format";
@@ -37,8 +37,10 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      {/* Top row: 3 parallel tiles — Daily / Monthly / Yearly */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      {/* Top row: 3 parallel tiles — Daily / Monthly / Yearly.
+          Daily and Monthly are sized to their content (no trailing whitespace);
+          Yearly takes the remaining width so the row fills the page column. */}
+      <div className="grid gap-4 lg:grid-cols-[auto_auto_1fr]">
         <DailyBarTile
           data={snapshot.yesterday}
           avgGross={snapshot.allTimeAvgGrossPl}
@@ -48,24 +50,32 @@ export default async function DashboardPage() {
         <YearlyBarTile data={snapshot.year} />
       </div>
 
-      {/* Full-width Annual Projection tile under the 3-tile row */}
+      {/* Current month — one bar per trading day */}
+      <DailyBarsChart
+        bars={snapshot.monthlyBars}
+        avgGrossPl={snapshot.monthlyAvgGrossPl}
+        avgNetPl={snapshot.monthlyAvgNetPl}
+      />
+
+      {/* Current year — one bar per month */}
+      <AnnualBarsChart
+        bars={snapshot.annualBars}
+        avgGrossPl={snapshot.annualAvgGrossPl}
+        avgNetPl={snapshot.annualAvgNetPl}
+        year={Number(snapshot.asOf.slice(0, 4))}
+      />
+
+      <BalanceLineChart
+        series={snapshot.balanceSeries}
+        capitalChanges={snapshot.capitalChanges}
+        currentYear={Number(snapshot.asOf.slice(0, 4))}
+      />
+
+      {/* Full-width Annual Projection tile */}
       <AnnualProjectionTile
         data={snapshot.annualProjection}
         plannedChanges={snapshot.plannedChanges}
       />
-
-      {/* Charts kept below */}
-      <Section title="Daily breakdown" subtitle="Current month">
-        <DailyBarsChart
-          bars={snapshot.monthlyBars}
-          avgGrossPl={snapshot.monthlyAvgGrossPl}
-          avgNetPl={snapshot.monthlyAvgNetPl}
-        />
-      </Section>
-
-      <Section title="Balance over time" subtitle="All-time">
-        <BalanceLineChart series={snapshot.balanceSeries} />
-      </Section>
     </div>
   );
 }

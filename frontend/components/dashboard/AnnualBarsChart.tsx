@@ -12,18 +12,19 @@ import {
   YAxis,
 } from "recharts";
 
-import { formatMoney, formatSignedPercent, monthName } from "@/lib/format";
-import type { DailyBarPoint } from "@/lib/types";
+import { formatMoney, formatSignedPercent } from "@/lib/format";
+import type { AnnualBarPoint } from "@/lib/types";
 
 interface Props {
-  bars: DailyBarPoint[];
+  bars: AnnualBarPoint[];
   avgGrossPl: string;
   avgNetPl: string;
+  year: number;
 }
 
 interface Row {
-  day: string;
-  dayNum: number;
+  month: string;
+  monthFull: string;
   winNet: number | null;
   winFee: number | null;
   loss: number | null;
@@ -33,29 +34,30 @@ interface Row {
   netPct: number;
 }
 
-export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+export default function AnnualBarsChart({ bars, avgGrossPl, avgNetPl, year }: Props) {
   if (bars.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-        No daily activity in the current month yet.
+        No annual data yet.
       </div>
     );
   }
 
-  // For winning days the bar splits into a "net" segment + "fee" segment
-  // stacked on top, so the full bar height = gross. For losing days we draw
-  // a single negative-going red bar. Future trading days arrive with all
-  // zeros from the backend — we render those as null so the x-axis tick
-  // is drawn but no bar appears.
   const data: Row[] = bars.map((b) => {
     const gross = Number(b.grossPl);
     const net = Number(b.netPl);
     const fee = Number(b.feePortion);
     const grossPct = Number(b.grossPct);
     const netPct = Number(b.netPct);
-    const day = b.date.slice(8, 10); // "DD"
-    const dayNum = Number(day);
-    const base = { day, dayNum, gross, net, grossPct, netPct };
+    const label = MONTH_ABBR[b.month - 1] ?? String(b.month);
+    const monthFull = MONTH_NAMES[b.month - 1] ?? String(b.month);
+    const base = { month: label, monthFull, gross, net, grossPct, netPct };
     if (gross === 0 && net === 0 && fee === 0) {
       return { ...base, winNet: null, winFee: null, loss: null };
     }
@@ -67,10 +69,7 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
 
   const avgGross = Number(avgGrossPl);
   const avgNet = Number(avgNetPl);
-
-  const [y, m] = bars[0].date.split("-").map(Number);
-  const monthFullName = monthName(m);
-  const title = `${monthFullName} ${y} Daily Performance`;
+  const title = `Annual ${year} Performance`;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -79,11 +78,11 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
       </h3>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 140, bottom: 8, left: 12 }} barCategoryGap="18%">
+          <BarChart data={data} margin={{ top: 8, right: 140, bottom: 8, left: 12 }} barCategoryGap="14%">
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="day" tick={{ fontSize: 11 }} interval={0} />
+            <XAxis dataKey="month" tick={{ fontSize: 11 }} interval={0} />
             <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatMoney(v)} width={80} />
-            <Tooltip content={<OrderedTooltip titlePrefix={`${monthFullName} `} useDayNum />} />
+            <Tooltip content={<OrderedTooltip year={year} />} />
             <Legend wrapperStyle={{ fontSize: 12 }} content={() => <OrderedLegend />} />
             <ReferenceLine y={0} stroke="#9ca3af" />
             <ReferenceLine
@@ -98,10 +97,9 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
               strokeDasharray="4 4"
               label={<AvgLabel value={avgNet} color="#015c40" />}
             />
-            {/* Legend & stacking order: Net first (bottom), Gross on top of it, Loss last. */}
-            <Bar dataKey="winNet" stackId="day" fill="#047857" name="Net" />
-            <Bar dataKey="winFee" stackId="day" fill="#6ee7b7" name="Gross" />
-            <Bar dataKey="loss" stackId="day" fill="#dc2626" name="Loss" />
+            <Bar dataKey="winNet" stackId="month" fill="#047857" name="Net" />
+            <Bar dataKey="winFee" stackId="month" fill="#6ee7b7" name="Gross" />
+            <Bar dataKey="loss" stackId="month" fill="#dc2626" name="Loss" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -109,11 +107,6 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
   );
 }
 
-/**
- * Custom tooltip: orders rows Net → Gross → Loss, applies per-row styling
- * (Net bold + dark green; Gross grey; Loss red), and prints the % gain after
- * each $ value (e.g. "Net: $1,506 (+0.32%)").
- */
 type TooltipPayload = {
   name?: string | number;
   value?: number | string;
@@ -122,15 +115,12 @@ type TooltipPayload = {
 function OrderedTooltip({
   active,
   payload,
-  label,
-  titlePrefix = "",
-  useDayNum = false,
+  year,
 }: {
   active?: boolean;
   payload?: TooltipPayload[];
   label?: string | number;
-  titlePrefix?: string;
-  useDayNum?: boolean;
+  year: number;
 }) {
   if (!active || !payload?.length) return null;
   const order = ["Net", "Gross", "Loss"];
@@ -138,12 +128,12 @@ function OrderedTooltip({
     .filter((p) => p?.name !== undefined && p?.value !== undefined && p?.value !== null)
     .sort((a, b) => order.indexOf(String(a.name)) - order.indexOf(String(b.name)));
   const rowData = payload[0]?.payload;
-  // Title: "May 15" — month name prefix + day number with no leading zero.
-  const titleSuffix = useDayNum && rowData ? rowData.dayNum : label;
+  // Title: full month name + year, e.g. "May 2026".
+  const title = rowData ? `${rowData.monthFull} ${year}` : String(year);
   return (
     <div className="inline-block rounded border border-zinc-200 bg-white px-3 py-2 text-xs shadow dark:border-zinc-700 dark:bg-zinc-900">
       <div className="mb-1 font-semibold text-zinc-900 dark:text-zinc-100">
-        {titlePrefix}{titleSuffix}
+        {title}
       </div>
       {rows.map((item, i) => {
         const name = String(item.name);
@@ -156,9 +146,6 @@ function OrderedTooltip({
                 ? "#dc2626"
                 : "#111";
         const fontWeight = name === "Net" ? 700 : 400;
-        // Gross row should show the FULL gross (net + fee portion), not just
-        // the stacked-bar's fee segment. Loss days carry the negative gross
-        // on the rowData.gross field.
         const displayValue =
           rowData && name === "Net"
             ? rowData.net
@@ -181,10 +168,6 @@ function OrderedTooltip({
   );
 }
 
-/**
- * Custom legend forced into the order Net → Gross → Loss regardless of how
- * Recharts orders Bar dataKeys internally.
- */
 function OrderedLegend() {
   const items = [
     { name: "Net", swatch: "#047857", text: "#047857" },
@@ -206,13 +189,6 @@ function OrderedLegend() {
   );
 }
 
-/**
- * Label rendered at the right end of an average ReferenceLine. The dollar
- * value sits vertically centered on the dotted line, with "Average" printed
- * just below it. Recharts hands us a viewBox describing the line's drawable
- * region — { x, y, width, height } — and we anchor the text at the right
- * end of the chart plot area.
- */
 function AvgLabel({
   value,
   color,
