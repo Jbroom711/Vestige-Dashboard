@@ -54,7 +54,7 @@ export default function ScraperStatusLine() {
     if (parts.length === 0) return null;
     const tone = status.isStale
       ? "text-amber-600 dark:text-amber-400"
-      : "text-zinc-400 dark:text-zinc-500";
+      : "text-zinc-300 dark:text-zinc-600";
     return <p className={`text-xs ${tone}`}>{parts.join(". ")}.</p>;
   }
 

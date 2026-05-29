@@ -25,6 +25,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Header + top tile row wrapped so their gap is independent of the
+          rest of the page's space-y-8. 6px on mobile (matches the py-1.5
+          above), 32px on desktop. */}
+      <div className="flex flex-col gap-1.5 sm:gap-8">
       <header className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
         <h1 className="hidden text-2xl font-semibold tracking-tight sm:block">Dashboard</h1>
         <div className="flex flex-col gap-0.5 sm:ml-auto sm:items-end sm:gap-0">
@@ -53,11 +57,8 @@ export default async function DashboardPage() {
 
       {/* Top row: 3 parallel tiles — Daily / Monthly / Yearly.
           Daily and Monthly are sized to their content (no trailing whitespace);
-          Yearly takes the remaining width so the row fills the page column.
-          !mt-2 sm:!mt-8 overrides space-y-8 to give a tight 8px gap below
-          the header on mobile (matching the 6px above), without using
-          negative margins that have caused tile-overlap issues. */}
-      <div className="!mt-1.5 grid gap-4 sm:!mt-8 lg:grid-cols-[auto_auto_1fr]">
+          Yearly takes the remaining width so the row fills the page column. */}
+      <div className="grid gap-4 lg:grid-cols-[auto_auto_1fr]">
         <DailyBarTile
           data={snapshot.yesterday}
           avgGross={snapshot.allTimeAvgGrossPl}
@@ -66,6 +67,7 @@ export default async function DashboardPage() {
         <MonthlyBarTile data={snapshot.month} />
         <YearlyBarTile data={snapshot.year} />
       </div>
+      </div>  {/* close header+tiles wrapper */}
 
       {/* Current month — one bar per trading day */}
       <DailyBarsChart
