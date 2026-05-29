@@ -25,7 +25,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+      <header className="-mb-6 flex flex-col gap-1 sm:mb-0 sm:flex-row sm:items-baseline sm:gap-3">
         <h1 className="hidden text-2xl font-semibold tracking-tight sm:block">Dashboard</h1>
         <div className="flex flex-col gap-0.5 sm:ml-auto sm:items-end sm:gap-0">
           {/* Top metric line — split LEFT/RIGHT on mobile, packed on the right on desktop */}
