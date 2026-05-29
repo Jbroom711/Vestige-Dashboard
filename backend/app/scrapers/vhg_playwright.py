@@ -78,6 +78,16 @@ def fetch_html_via_browser(
         context.add_init_script(_STEALTH_INIT)
         page = context.new_page()
         try:
+            # 0) Sanity check — print the apparent exit IP so we can confirm
+            # the proxy is actually routing traffic (vs. silently bypassed).
+            try:
+                page.goto("https://api.ipify.org?format=text", timeout=20_000)
+                _wait_for_settle(page)
+                ip_text = (page.text_content("body") or "").strip()[:60]
+                print(f"[vhg-playwright] outbound IP via browser: {ip_text!r}")
+            except Exception as e:
+                print(f"[vhg-playwright] IP check failed (continuing): {e!r}")
+
             # 1) Hit the homepage so Cloudflare can serve cf_clearance.
             # wait_until="networkidle" waits for CF's challenge JS to redirect
             # and the real page to finish loading; otherwise page.title()
