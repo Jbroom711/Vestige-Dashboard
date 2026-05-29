@@ -345,8 +345,21 @@ def _find_named_array(html: str, label_name: str) -> list[str]:
     m = re.search(pat, html)
     if not m:
         raise VHGScrapeError(f"Dataset '{label_name}' not found in response")
-    # Values may be single-quoted strings or bare numbers; capture either.
-    return re.findall(r"['\"]?([\-\d.,]+)['\"]?", m.group(1))
+    raw = m.group(1)
+    # One-time diagnostic: when the response shape changes, print the raw
+    # array contents so we can see what we're parsing.
+    print(f"[vhg-parse] {label_name} raw[:200]={raw[:200]!r}")
+    # Numbers may be plain, quoted, or floats; split on commas, trim quotes
+    # and whitespace, and drop empty/non-numeric entries.
+    out: list[str] = []
+    for piece in raw.split(","):
+        cleaned = piece.strip().strip("'\"").strip()
+        if not cleaned:
+            continue
+        # Accept things that look like a (possibly signed, possibly decimal) number
+        if re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned):
+            out.append(cleaned)
+    return out
 
 
 def _parse_date(s: str) -> date:
