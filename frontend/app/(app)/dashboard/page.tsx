@@ -57,7 +57,7 @@ export default async function DashboardPage() {
           !mt-2 sm:!mt-8 overrides space-y-8 to give a tight 8px gap below
           the header on mobile (matching the 6px above), without using
           negative margins that have caused tile-overlap issues. */}
-      <div className="!mt-2 grid gap-4 sm:!mt-8 lg:grid-cols-[auto_auto_1fr]">
+      <div className="!mt-1.5 grid gap-4 sm:!mt-8 lg:grid-cols-[auto_auto_1fr]">
         <DailyBarTile
           data={snapshot.yesterday}
           avgGross={snapshot.allTimeAvgGrossPl}
