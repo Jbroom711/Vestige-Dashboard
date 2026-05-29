@@ -109,6 +109,9 @@ def main() -> int:
         rows = parse_html(html)
     except VHGScrapeError as e:
         print(f"[vhg-refresh] parse failed: {e}", file=sys.stderr)
+        # Diagnostic dump for short/unexpected responses
+        snippet = html[:1000] if len(html) <= 1000 else html[:500] + " ... " + html[-500:]
+        print(f"[vhg-refresh] response body ({len(html)} bytes): {snippet!r}", file=sys.stderr)
         return 3
     print(f"[vhg-refresh] parsed {len(rows)} daily rows from vhg.app")
 
