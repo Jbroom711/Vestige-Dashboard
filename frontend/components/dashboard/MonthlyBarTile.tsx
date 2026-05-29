@@ -26,7 +26,7 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
         </p>
       </header>
 
-      <div className="mt-auto flex items-end justify-center gap-[11px]">
+      <div className="mt-auto flex items-end justify-start gap-[11px] sm:justify-center">
         {/* --- The projection bar (no header, just the bar) --- */}
         <div className="relative shrink-0" style={{ height: BAR_HEIGHT_PX, width: 120 }}>
           <div

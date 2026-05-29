@@ -26,7 +26,7 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
         </p>
       </header>
 
-      <div className="mt-auto flex items-end justify-center gap-[11px]">
+      <div className="mt-auto flex items-end justify-start gap-[11px] sm:justify-center">
         <div className="relative shrink-0" style={{ height: BAR_HEIGHT_PX, width: 120 }}>
           <div
             className="absolute bottom-0 left-0 flex w-full flex-col overflow-hidden rounded-lg shadow-inner"

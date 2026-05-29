@@ -59,7 +59,7 @@ export default function DailyBarTile({
         </h2>
       </header>
 
-      <div className="mt-auto flex items-end justify-center gap-[11px]">
+      <div className="mt-auto flex items-end justify-start gap-[11px] sm:justify-center">
         {/* --- Bars: narrow avg + main, both bottom-anchored --- */}
         <div
           className="flex shrink-0 items-end"
