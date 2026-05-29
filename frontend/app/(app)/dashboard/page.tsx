@@ -4,6 +4,7 @@ import BalanceLineChart from "@/components/dashboard/BalanceLineChart";
 import DailyBarTile from "@/components/dashboard/DailyBarTile";
 import DailyBarsChart from "@/components/dashboard/DailyBarsChart";
 import MonthlyBarTile from "@/components/dashboard/MonthlyBarTile";
+import ScraperStatusLine from "@/components/dashboard/ScraperStatusLine";
 import YearlyBarTile from "@/components/dashboard/YearlyBarTile";
 import { ApiError, apiServer } from "@/lib/api.server";
 import { formatMoney } from "@/lib/format";
@@ -24,12 +25,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex items-baseline gap-3">
+      <header className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
         <h1 className="hidden text-2xl font-semibold tracking-tight sm:block">Dashboard</h1>
-        <p className="text-sm font-medium tabular-nums sm:ml-auto sm:text-base">
-          Balance: <span className="font-semibold">{formatMoney(snapshot.currentBalance)}</span>
-          {", "}YTD Net: <span className="font-semibold">{formatMoney(snapshot.year.netPl)}</span>
-        </p>
+        <div className="flex flex-col sm:ml-auto sm:items-end">
+          <p className="text-sm font-medium tabular-nums sm:text-base">
+            Balance: <span className="font-semibold">{formatMoney(snapshot.currentBalance)}</span>
+            {", "}YTD Net: <span className="font-semibold">{formatMoney(snapshot.year.netPl)}</span>
+          </p>
+          <ScraperStatusLine />
+        </div>
       </header>
 
       {/* Top row: 3 parallel tiles — Daily / Monthly / Yearly.
