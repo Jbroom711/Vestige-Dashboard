@@ -40,7 +40,7 @@ export default async function DashboardPage() {
               <span className="font-normal text-zinc-500">Net YTD </span>
               <span className="font-bold text-zinc-900 dark:text-zinc-100">
                 {formatMoney(snapshot.year.netPl)},{" "}
-                {formatSignedPercent(snapshot.year.netPct, 1)}
+                {formatSignedPercent(snapshot.year.projectedNetPct, 1)}
               </span>
             </p>
           </div>
