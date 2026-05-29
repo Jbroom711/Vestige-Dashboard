@@ -24,15 +24,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex items-baseline justify-between gap-3">
+      <header className="flex items-baseline gap-3">
         <h1 className="hidden text-2xl font-semibold tracking-tight sm:block">Dashboard</h1>
-        <p className="ml-auto text-sm font-medium tabular-nums sm:text-base">
-          Current Balance:{" "}
-          <span className="font-semibold">{formatMoney(snapshot.currentBalance)}</span>
-          {", "}Total Net Gain:{" "}
-          <span className="font-semibold">
-            {formatMoney(Number(snapshot.currentBalance) - Number(snapshot.deployedCapital))}
-          </span>
+        <p className="text-sm font-medium tabular-nums sm:ml-auto sm:text-base">
+          Balance: <span className="font-semibold">{formatMoney(snapshot.currentBalance)}</span>
+          {", "}YTD Net: <span className="font-semibold">{formatMoney(snapshot.year.netPl)}</span>
         </p>
       </header>
 

@@ -75,7 +75,7 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
   const isMobile = useIsMobile();
   // Reserve less right margin on mobile (just enough to fit "$X,XXX"), no
   // "Avg" suffix on each line; render a single "Avg" column header instead.
-  const rightMargin = isMobile ? 50 : 140;
+  const rightMargin = isMobile ? 70 : 140;
   const leftMargin = isMobile ? 0 : 12;
 
   return (

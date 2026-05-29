@@ -44,6 +44,7 @@ interface Row {
 }
 
 const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_INITIAL = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -80,9 +81,15 @@ export default function AnnualBarsChart({ bars, avgGrossPl, avgNetPl, year }: Pr
   const avgNet = Number(avgNetPl);
   const title = `Annual ${year} Performance`;
   const isMobile = useIsMobile();
-  const rightMargin = isMobile ? 50 : 140;
+  const rightMargin = isMobile ? 70 : 140;
   const leftMargin = isMobile ? 0 : 12;
   const yAxisWidth = isMobile ? 50 : 80;
+  const tickFormatter = isMobile
+    ? (m: string) => {
+        const idx = MONTH_ABBR.indexOf(m);
+        return idx >= 0 ? MONTH_INITIAL[idx] : m;
+      }
+    : undefined;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -100,7 +107,7 @@ export default function AnnualBarsChart({ bars, avgGrossPl, avgNetPl, year }: Pr
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 8, right: rightMargin, bottom: 8, left: leftMargin }} barCategoryGap="14%">
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="month" tick={{ fontSize: 11 }} interval={0} />
+            <XAxis dataKey="month" tick={{ fontSize: 11 }} interval={0} tickFormatter={tickFormatter} />
             <YAxis
               tick={{ fontSize: 11 }}
               tickFormatter={(v: number) => (isMobile ? formatMoneyK(v) : formatMoney(v))}
