@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     frontend_origins: str = "http://localhost:3007"
     app_env: str = "development"
 
+    # Shared secret for unauthenticated voice/Siri endpoints. Treat like a password.
+    # In dev, the default works; in prod, set a strong random string in env.
+    voice_token: str = "dev-voice-token"
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.frontend_origins.split(",") if o.strip()]
