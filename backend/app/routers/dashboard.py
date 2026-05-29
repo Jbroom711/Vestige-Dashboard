@@ -400,10 +400,6 @@ def snapshot(
     total_year_nyse = len(trading_days_between(year_start_calendar, year_end_calendar))
     nyse_remaining_year = len(trading_days_between(as_of + timedelta(days=1), year_end_calendar))
 
-    # SIMPLE projected % (bar display): avg_daily × total_trading_days
-    year_simple_proj_gross_pct = year_avg_gross_rate * Decimal(total_year_nyse)
-    year_simple_proj_net_pct = year_avg_net_rate * Decimal(total_year_nyse)
-
     # Active rate: how often the user actually traded NYSE sessions historically.
     # Used for both the Yearly tile and the Annual Projection tile so they
     # agree on the projection methodology when no plans are active.
@@ -413,6 +409,16 @@ def snapshot(
         Decimal(active_count_total) / Decimal(hist_nyse_total)
         if hist_nyse_total > 0
         else Decimal("1")
+    )
+
+    # SIMPLE projected % (bar display): avg_daily × total_trading_days × active_rate.
+    # The active_rate factor brings the displayed % into line with the $
+    # projection (which uses project_year_with_plans w/ active_rate).
+    year_simple_proj_gross_pct = (
+        year_avg_gross_rate * Decimal(total_year_nyse) * active_rate_for_proj
+    )
+    year_simple_proj_net_pct = (
+        year_avg_net_rate * Decimal(total_year_nyse) * active_rate_for_proj
     )
 
     # Yearly tile $ projection: project_year_with_plans with NO plans. This

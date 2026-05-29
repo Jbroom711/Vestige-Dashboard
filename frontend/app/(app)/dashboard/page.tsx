@@ -25,7 +25,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+      <header className="-mb-6 flex flex-col gap-1 sm:mb-0 sm:flex-row sm:items-baseline sm:gap-3">
         <h1 className="hidden text-2xl font-semibold tracking-tight sm:block">Dashboard</h1>
         <div className="flex flex-col gap-0.5 sm:ml-auto sm:items-end sm:gap-0">
           {/* Top metric line — split LEFT/RIGHT on mobile, packed on the right on desktop */}
@@ -39,7 +39,10 @@ export default async function DashboardPage() {
             <p className="text-sm tabular-nums sm:text-base">
               <span className="font-normal text-zinc-500">Net YTD </span>
               <span className="font-bold text-zinc-900 dark:text-zinc-100">
-                {formatMoney(snapshot.year.netPl)},{" "}
+                {formatMoney(snapshot.year.netPl)},
+              </span>
+              <span className="font-normal text-zinc-500"> Avg </span>
+              <span className="font-bold text-zinc-900 dark:text-zinc-100">
                 {formatSignedPercent(snapshot.year.projectedNetPct, 1)}
               </span>
             </p>
