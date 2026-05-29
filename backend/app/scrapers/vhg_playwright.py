@@ -102,10 +102,20 @@ def fetch_html_via_browser(
             _wait_for_settle(page)
             _ensure_not_blocked(page, where="login")
             try:
-                page.wait_for_selector("#user_login", timeout=15_000)
+                # Try multiple selector variants; vhg.app might be using a
+                # custom-themed form rather than vanilla WP fields.
+                page.wait_for_selector(
+                    "#user_login, input[name='log'], input[type='email']",
+                    timeout=30_000,
+                )
             except PWTimeoutError as e:
+                title = _safe_title(page)
+                body_snippet = (page.text_content("body") or "")[:400]
+                html_snippet = (page.content() or "")[:1500]
                 raise VHGScrapeError(
-                    f"Login form (#user_login) didn't appear within 15s. URL={page.url}"
+                    f"Login form not found. URL={page.url}, title={title!r}. "
+                    f"Body[:400]={body_snippet!r}. "
+                    f"HTML[:1500]={html_snippet!r}"
                 ) from e
             page.fill("#user_login", email)
             page.fill("#user_pass", password)
