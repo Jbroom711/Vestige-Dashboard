@@ -25,7 +25,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             />
             <span className="text-lg font-semibold tracking-tight">Vestige</span>
           </Link>
-          <AppNav />
+          {/* View/Entry toggle: desktop only. Entry is used rarely (capital
+              changes + fee overrides); not worth the header real estate on
+              mobile. */}
+          <div className="hidden sm:block">
+            <AppNav />
+          </div>
           <div className="flex items-center gap-3">
             <Link
               href="/account"
