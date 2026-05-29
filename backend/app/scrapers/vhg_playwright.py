@@ -72,13 +72,17 @@ def fetch_html_via_browser(
         page = context.new_page()
         try:
             # 1) Hit the homepage so Cloudflare can serve cf_clearance.
-            page.goto(_HOMEPAGE, wait_until="domcontentloaded", timeout=45_000)
+            # wait_until="networkidle" waits for CF's challenge JS to redirect
+            # and the real page to finish loading; otherwise page.title()
+            # races with navigation and throws "execution context destroyed".
+            page.goto(_HOMEPAGE, wait_until="networkidle", timeout=60_000)
             page.wait_for_timeout(cf_settle_ms)
+            _wait_for_settle(page)
             _ensure_not_blocked(page, where="homepage")
 
             # 2) Navigate to the WP login form and submit credentials.
-            page.goto(_LOGIN_URL, wait_until="domcontentloaded", timeout=45_000)
-            page.wait_for_timeout(1000)
+            page.goto(_LOGIN_URL, wait_until="networkidle", timeout=60_000)
+            _wait_for_settle(page)
             _ensure_not_blocked(page, where="login")
             try:
                 page.wait_for_selector("#user_login", timeout=15_000)
@@ -133,15 +137,41 @@ def fetch_html_via_browser(
             browser.close()
 
 
+def _wait_for_settle(page: Page) -> None:
+    """Best-effort wait until the page stops navigating. Useful right after
+    a Cloudflare challenge because CF chains DOMContentLoaded → JS challenge
+    → token submission → final navigation; calling page.title() during any
+    of those re-navigations throws 'execution context destroyed'."""
+    for _ in range(3):
+        try:
+            page.wait_for_load_state("networkidle", timeout=15_000)
+            return
+        except PWTimeoutError:
+            continue
+        except Exception:
+            page.wait_for_timeout(1500)
+
+
+def _safe_title(page: Page) -> str:
+    """Retry page.title() across navigation races."""
+    for _ in range(3):
+        try:
+            return page.title() or ""
+        except Exception:
+            page.wait_for_timeout(1500)
+    return ""
+
+
 def _ensure_not_blocked(page: Page, *, where: str) -> None:
     """Detect Cloudflare's hard-block / challenge pages so we fail loudly
     rather than silently submitting login credentials to an error page."""
-    title = (page.title() or "").lower()
+    title = _safe_title(page).lower()
     if "just a moment" in title or "checking your browser" in title:
-        # Possibly auto-resolves; wait once more.
-        page.wait_for_timeout(6000)
-        title = (page.title() or "").lower()
-        if "just a moment" in title:
+        # Challenge still in progress; give it another beat.
+        page.wait_for_timeout(8000)
+        _wait_for_settle(page)
+        title = _safe_title(page).lower()
+        if "just a moment" in title or "checking your browser" in title:
             raise VHGScrapeError(
                 f"Cloudflare challenge at {where} didn't auto-resolve. "
                 "May need an updated stealth patch."
