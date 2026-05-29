@@ -163,25 +163,63 @@ def fetch_html(
 
     Raises VHGScrapeError on auth failure or non-2xx response.
     """
+    base_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+    }
     client_kwargs: dict[str, object] = {
         "follow_redirects": True,
         "timeout": 30.0,
-        "headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/131.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-        },
+        "headers": base_headers,
     }
     if proxy_url:
         client_kwargs["proxy"] = proxy_url
 
     with httpx.Client(**client_kwargs) as client:  # type: ignore[arg-type]
+        # Step 1: warm-up GET to vhg.app/ — picks up cf_clearance and any
+        # other Cloudflare-issued cookies, so subsequent requests look like
+        # they come from a session that already cleared the bot check.
+        warm = client.get("https://vhg.app/", headers={"Sec-Fetch-Site": "none", "Sec-Fetch-Mode": "navigate"})
+        print(
+            f"[vhg-scrape] warm-up GET vhg.app: {warm.status_code}, "
+            f"{len(warm.text):,} bytes, cookies after: {list(client.cookies.keys())}"
+        )
+        if warm.status_code >= 400:
+            raise VHGScrapeError(
+                f"Warm-up GET to vhg.app/ returned {warm.status_code}. "
+                f"Body: {warm.text[:300]!r}"
+            )
+
+        # Step 2: GET the login page itself — sets WP-specific cookies and
+        # gives us a real Referer for the subsequent POST.
+        login_get = client.get(
+            LOGIN_URL,
+            headers={
+                "Referer": "https://vhg.app/",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "navigate",
+            },
+        )
+        print(
+            f"[vhg-scrape] GET wp-login.php: {login_get.status_code}, "
+            f"{len(login_get.text):,} bytes"
+        )
+        if login_get.status_code >= 400:
+            raise VHGScrapeError(
+                f"GET wp-login.php returned {login_get.status_code}. "
+                f"Body: {login_get.text[:300]!r}"
+            )
+
         # WordPress requires the test cookie to be set before login POST.
         client.cookies.set("wordpress_test_cookie", "WP Cookie check", domain="vhg.app")
+
+        # Step 3: POST credentials, now with full browser-flavored headers.
         r = client.post(
             LOGIN_URL,
             data={
@@ -190,6 +228,14 @@ def fetch_html(
                 "wp-submit": "Log In",
                 "testcookie": "1",
                 "redirect_to": "https://vhg.app/",
+            },
+            headers={
+                "Referer": LOGIN_URL,
+                "Origin": "https://vhg.app",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-User": "?1",
             },
         )
         if r.status_code >= 400:
