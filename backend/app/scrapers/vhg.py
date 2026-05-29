@@ -171,7 +171,8 @@ def fetch_html(
 
     proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
 
-    with cc_requests.Session(impersonate="chrome131", proxies=proxies) as s:
+    # chrome124 is supported across curl_cffi 0.6+; bump as we upgrade.
+    with cc_requests.Session(impersonate="chrome124", proxies=proxies) as s:
         # Step 1: warm-up GET to vhg.app/ — Cloudflare issues cf_clearance
         # on a successful first hit; subsequent requests reuse it via the
         # session cookie jar.
