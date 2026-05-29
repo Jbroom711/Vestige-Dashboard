@@ -4,14 +4,13 @@ if the nightly refresh job has stopped working.
 
 Returns:
   last_data_date: ISO date of newest daily_returns row.
-  data_age_business_days: how many weekdays old that row is (excludes
-    weekends; doesn't subtract NYSE holidays — close enough).
-  cookie_set_at: ISO date the user last refreshed VHG_COOKIE
-    (sourced from VHG_COOKIE_SET_AT env var; null when unset).
+  data_age_business_days: how many weekdays old that row is.
+  cookie_set_at: when the active vhg cookie was last refreshed. Prefers
+    `scraper_cookies.refreshed_at` (auto-updated when WordPress sends a
+    sliding-session refresh) and falls back to VHG_COOKIE_SET_AT env var
+    for the bootstrap case.
   cookie_age_days: today - cookie_set_at, or null.
-  is_stale: convenience flag the UI uses to decide whether to highlight
-    the line. True when data is >=2 business days behind or cookie age
-    is >=14 days.
+  is_stale: True when data >=2 business days behind or cookie age >=14d.
 """
 
 from __future__ import annotations
@@ -60,15 +59,30 @@ def status(_: Annotated[CurrentUser, Depends(require_approved)]) -> dict[str, ob
     else:
         data_age = None
 
-    cookie_set_at_raw = os.environ.get("VHG_COOKIE_SET_AT")
-    if cookie_set_at_raw:
+    # Prefer the DB-tracked refreshed_at (auto-renewing path); fall back to
+    # the bootstrap env var if there's no DB row yet.
+    cookie_set: date | None = None
+    db_row = (
+        sb.table("scraper_cookies")
+        .select("refreshed_at")
+        .eq("name", "vhg")
+        .limit(1)
+        .execute()
+        .data
+    )
+    if db_row:
         try:
-            cookie_set = date.fromisoformat(cookie_set_at_raw)
-            cookie_age = (today - cookie_set).days
-        except ValueError:
-            cookie_set, cookie_age = None, None
-    else:
-        cookie_set, cookie_age = None, None
+            cookie_set = date.fromisoformat(db_row[0]["refreshed_at"][:10])
+        except (ValueError, KeyError, TypeError):
+            cookie_set = None
+    if cookie_set is None:
+        env_val = os.environ.get("VHG_COOKIE_SET_AT")
+        if env_val:
+            try:
+                cookie_set = date.fromisoformat(env_val)
+            except ValueError:
+                cookie_set = None
+    cookie_age = (today - cookie_set).days if cookie_set else None
 
     is_stale = (data_age is not None and data_age >= 2) or (
         cookie_age is not None and cookie_age >= 14

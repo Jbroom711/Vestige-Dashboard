@@ -45,13 +45,50 @@ def main() -> int:
     accnum = os.environ.get("VHG_ACCNUM", "1011389")
     userid = os.environ.get("VHG_USERID", "23")
 
+    sb_early = service_client()
+
+    # Prefer the DB-stored cookie (kept fresh by previous runs via WP's
+    # sliding-session refresh). Fall back to env var on first bootstrap.
+    db_row = (
+        sb_early.table("scraper_cookies")
+        .select("cookie, refreshed_at")
+        .eq("name", "vhg")
+        .limit(1)
+        .execute()
+        .data
+    )
+    db_cookie = db_row[0]["cookie"] if db_row else None
+    if db_cookie:
+        cookie_source = "db"
+        cookie = db_cookie
+        print(f"[vhg-refresh] using cookie from DB (refreshed_at={db_row[0]['refreshed_at']})")
+    elif cookie:
+        cookie_source = "env"
+        print(f"[vhg-refresh] using cookie from env (length {len(cookie)} chars)")
+    else:
+        cookie_source = None
+
     if cookie:
-        print(f"[vhg-refresh] auth mode = cookie (length {len(cookie)} chars)")
         try:
-            html = fetch_html_with_cookie(cookie, accnum, userid)
+            html, refreshed_cookie = fetch_html_with_cookie(cookie, accnum, userid)
         except VHGScrapeError as e:
             print(f"[vhg-refresh] cookie fetch failed: {e}", file=sys.stderr)
             return 2
+
+        # Persist any refreshed cookie returned via WP's Set-Cookie response.
+        # This is the auto-renewal half of the sliding-session pattern.
+        if refreshed_cookie:
+            sb_early.table("scraper_cookies").upsert(
+                {"name": "vhg", "cookie": refreshed_cookie}
+            ).execute()
+            print("[vhg-refresh] cookie auto-renewed via Set-Cookie (saved to DB)")
+        elif cookie_source == "env":
+            # First run with env-var cookie — seed the DB so future runs
+            # update from there even if no Set-Cookie was sent.
+            sb_early.table("scraper_cookies").upsert(
+                {"name": "vhg", "cookie": cookie}
+            ).execute()
+            print("[vhg-refresh] seeded DB with env-var cookie")
     elif email and password:
         print(f"[vhg-refresh] auth mode = credentials ({email})")
         try:
@@ -75,7 +112,7 @@ def main() -> int:
         return 3
     print(f"[vhg-refresh] parsed {len(rows)} daily rows from vhg.app")
 
-    sb = service_client()
+    sb = sb_early
     admin = (
         sb.table("profiles")
         .select("id, email")

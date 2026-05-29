@@ -50,14 +50,23 @@ _BROWSER_HEADERS = {
 }
 
 
-def fetch_html_with_cookie(cookie: str, accnum: str, userid: str) -> str:
+def fetch_html_with_cookie(
+    cookie: str, accnum: str, userid: str
+) -> tuple[str, str | None]:
     """Fetch trading_reporting using a stored session cookie.
 
     The cookie string is exactly what you'd paste into a browser's Cookie
     header — `name1=val1; name2=val2; ...`. This skips the WordPress login
     flow entirely, so it works even when Cloudflare blocks programmatic
-    logins. Raises VHGScrapeError("cookie expired ...") with a clear,
-    actionable message when the server tells us we're not logged in.
+    logins.
+
+    Returns `(html, refreshed_cookie)`. The second tuple element is non-null
+    when the server sent back a refreshed `wordpress_logged_in_*` cookie via
+    Set-Cookie — WordPress's "sliding session" pattern. Callers should
+    persist the refreshed cookie so the next run uses the extended one.
+
+    Raises VHGScrapeError("cookie expired ...") with a clear, actionable
+    message when the server tells us we're not logged in.
     """
     headers = {**_BROWSER_HEADERS, "Cookie": cookie}
     with httpx.Client(timeout=30.0) as client:
@@ -71,6 +80,7 @@ def fetch_html_with_cookie(cookie: str, accnum: str, userid: str) -> str:
             },
             headers=headers,
         )
+        refreshed = _build_refreshed_cookie(cookie, client.cookies)
     if r.status_code == 403:
         raise VHGScrapeError(
             "HTTP 403 from vhg.app — cookie expired or Cloudflare block. "
@@ -94,7 +104,43 @@ def fetch_html_with_cookie(cookie: str, accnum: str, userid: str) -> str:
             "Got the WP login page instead of chart data. Cookie expired. "
             "Refresh VHG_COOKIE in Railway."
         )
-    return text
+    return text, refreshed
+
+
+def _build_refreshed_cookie(original: str, client_cookies: httpx.Cookies) -> str | None:
+    """Merge any refreshed WordPress cookies from the response back into the
+    original cookie string. WordPress's sliding-session pattern sends a
+    `Set-Cookie: wordpress_logged_in_<hash>=...` with an extended expiration
+    on authenticated requests when the session is past its halfway mark.
+
+    Returns the rebuilt cookie string if anything changed, else None.
+    """
+    refreshed_names = {
+        name
+        for name in client_cookies.keys()
+        if name.startswith("wordpress_logged_in_") or name.startswith("wordpress_sec_")
+    }
+    if not refreshed_names:
+        return None
+
+    # Parse the original cookie into (name, value) pairs preserving order.
+    pairs: list[tuple[str, str]] = []
+    for chunk in original.split(";"):
+        chunk = chunk.strip()
+        if not chunk or "=" not in chunk:
+            continue
+        name, value = chunk.split("=", 1)
+        pairs.append((name.strip(), value.strip()))
+
+    changed = False
+    for i, (name, value) in enumerate(pairs):
+        if name in refreshed_names:
+            new_value = client_cookies.get(name)
+            if new_value and new_value != value:
+                pairs[i] = (name, new_value)
+                changed = True
+
+    return "; ".join(f"{n}={v}" for n, v in pairs) if changed else None
 
 
 def fetch_html(email: str, password: str, accnum: str, userid: str) -> str:
