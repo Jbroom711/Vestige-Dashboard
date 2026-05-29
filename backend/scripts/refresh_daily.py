@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(_HERE, "..")))
 from app.db import service_client  # noqa: E402
 from app.scrapers.vhg import (  # noqa: E402
     VHGScrapeError,
+    fetch_html,
     fetch_html_with_cookie,
     parse_html,
 )
@@ -55,10 +56,24 @@ def main() -> int:
     sb_early = service_client()
 
     # --- Auth path selection ---------------------------------------------
-    # Path 1 (preferred from a hosted IP): Playwright drives a real browser
-    # so it can solve Cloudflare and acquire its own cf_clearance cookie.
-    if email and password and _PLAYWRIGHT_AVAILABLE:
-        proxy_url = os.environ.get("PROXY_URL")
+    # Path 1 (preferred): plain httpx through a residential/ISP proxy.
+    # Verified 2026-05-30 against BrightData ISP — curl-equivalent requests
+    # pass Cloudflare cleanly because the IP is trusted; Playwright fails on
+    # the same proxy because Chromium's TLS/canvas fingerprint trips CF's
+    # bot detection. So when both PROXY_URL and credentials are present, we
+    # skip the browser entirely.
+    proxy_url = os.environ.get("PROXY_URL")
+    if email and password and proxy_url:
+        print(f"[vhg-refresh] auth mode = httpx via proxy ({email})")
+        try:
+            html = fetch_html(email, password, accnum, userid, proxy_url=proxy_url)
+        except VHGScrapeError as e:
+            print(f"[vhg-refresh] httpx fetch failed: {e}", file=sys.stderr)
+            return 2
+
+    # Path 2 (legacy): Playwright + proxy. Heavier; kept in case some future
+    # proxy provider needs JavaScript execution (e.g. CF JS challenges).
+    elif email and password and _PLAYWRIGHT_AVAILABLE:
         proxy_note = " (via residential proxy)" if proxy_url else ""
         print(f"[vhg-refresh] auth mode = Playwright browser ({email}){proxy_note}")
         try:

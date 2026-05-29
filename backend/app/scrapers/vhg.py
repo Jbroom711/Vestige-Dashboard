@@ -143,15 +143,43 @@ def _build_refreshed_cookie(original: str, client_cookies: httpx.Cookies) -> str
     return "; ".join(f"{n}={v}" for n, v in pairs) if changed else None
 
 
-def fetch_html(email: str, password: str, accnum: str, userid: str) -> str:
+def fetch_html(
+    email: str,
+    password: str,
+    accnum: str,
+    userid: str,
+    *,
+    proxy_url: str | None = None,
+) -> str:
     """Log in to vhg.app with credentials and return the trading_reporting
-    HTML payload. Most installs are now behind Cloudflare/WAF that block
-    programmatic logins; use `fetch_html_with_cookie` instead unless you've
-    verified credential-based login still works for this account.
+    HTML payload.
+
+    When `proxy_url` is set (typical in production), the entire flow is
+    routed through that proxy. With a clean residential/ISP proxy that
+    Cloudflare trusts (e.g. BrightData ISP), plain httpx works fine —
+    we don't need Playwright's heavy browser fingerprint. Cloudflare's
+    bot detection trips on Chromium's TLS/canvas tells; raw httpx with a
+    real-browser User-Agent through a trusted exit IP slips past.
 
     Raises VHGScrapeError on auth failure or non-2xx response.
     """
-    with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+    client_kwargs: dict[str, object] = {
+        "follow_redirects": True,
+        "timeout": 30.0,
+        "headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    }
+    if proxy_url:
+        client_kwargs["proxy"] = proxy_url
+
+    with httpx.Client(**client_kwargs) as client:  # type: ignore[arg-type]
         # WordPress requires the test cookie to be set before login POST.
         client.cookies.set("wordpress_test_cookie", "WP Cookie check", domain="vhg.app")
         r = client.post(
@@ -165,7 +193,7 @@ def fetch_html(email: str, password: str, accnum: str, userid: str) -> str:
             },
         )
         if r.status_code >= 400:
-            raise VHGScrapeError(f"Login HTTP {r.status_code}")
+            raise VHGScrapeError(f"Login HTTP {r.status_code} — body: {r.text[:300]!r}")
         if not any(name.startswith("wordpress_logged_in") for name in client.cookies.keys()):
             raise VHGScrapeError(
                 "Login did not produce a logged_in cookie — wrong credentials, "
