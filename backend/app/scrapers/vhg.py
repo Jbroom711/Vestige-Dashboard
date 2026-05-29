@@ -154,41 +154,35 @@ def fetch_html(
     """Log in to vhg.app with credentials and return the trading_reporting
     HTML payload.
 
-    When `proxy_url` is set (typical in production), the entire flow is
-    routed through that proxy. With a clean residential/ISP proxy that
-    Cloudflare trusts (e.g. BrightData ISP), plain httpx works fine —
-    we don't need Playwright's heavy browser fingerprint. Cloudflare's
-    bot detection trips on Chromium's TLS/canvas tells; raw httpx with a
-    real-browser User-Agent through a trusted exit IP slips past.
+    Uses `curl_cffi` (libcurl + Chrome TLS fingerprint impersonation) rather
+    than plain httpx, because Cloudflare fingerprints the TLS handshake —
+    Python's `ssl` module produces a recognizable JA3 hash that vhg.app's
+    CF rejects, even from a trusted residential proxy. libcurl + impersonate
+    "chrome131" reproduces Chrome's TLS handshake, so the request is
+    indistinguishable from a real browser at the transport layer.
+
+    When `proxy_url` is set (typical in production), traffic is tunneled
+    through it. Login flow: warm-up GET → login-page GET → credentials POST
+    → trading_reporting AJAX, all on a single cookie-sharing session.
 
     Raises VHGScrapeError on auth failure or non-2xx response.
     """
-    base_headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-    }
-    client_kwargs: dict[str, object] = {
-        "follow_redirects": True,
-        "timeout": 30.0,
-        "headers": base_headers,
-    }
-    if proxy_url:
-        client_kwargs["proxy"] = proxy_url
+    from curl_cffi import requests as cc_requests
 
-    with httpx.Client(**client_kwargs) as client:  # type: ignore[arg-type]
-        # Step 1: warm-up GET to vhg.app/ — picks up cf_clearance and any
-        # other Cloudflare-issued cookies, so subsequent requests look like
-        # they come from a session that already cleared the bot check.
-        warm = client.get("https://vhg.app/", headers={"Sec-Fetch-Site": "none", "Sec-Fetch-Mode": "navigate"})
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+
+    with cc_requests.Session(impersonate="chrome131", proxies=proxies) as s:
+        # Step 1: warm-up GET to vhg.app/ — Cloudflare issues cf_clearance
+        # on a successful first hit; subsequent requests reuse it via the
+        # session cookie jar.
+        warm = s.get(
+            "https://vhg.app/",
+            headers={"Sec-Fetch-Site": "none", "Sec-Fetch-Mode": "navigate"},
+            timeout=30,
+        )
         print(
             f"[vhg-scrape] warm-up GET vhg.app: {warm.status_code}, "
-            f"{len(warm.text):,} bytes, cookies after: {list(client.cookies.keys())}"
+            f"{len(warm.text):,} bytes, cookies: {list(s.cookies.keys())}"
         )
         if warm.status_code >= 400:
             raise VHGScrapeError(
@@ -196,20 +190,18 @@ def fetch_html(
                 f"Body: {warm.text[:300]!r}"
             )
 
-        # Step 2: GET the login page itself — sets WP-specific cookies and
-        # gives us a real Referer for the subsequent POST.
-        login_get = client.get(
+        # Step 2: GET wp-login.php — sets WP-specific cookies and gives us
+        # a real Referer for the subsequent POST.
+        login_get = s.get(
             LOGIN_URL,
             headers={
                 "Referer": "https://vhg.app/",
                 "Sec-Fetch-Site": "same-origin",
                 "Sec-Fetch-Mode": "navigate",
             },
+            timeout=30,
         )
-        print(
-            f"[vhg-scrape] GET wp-login.php: {login_get.status_code}, "
-            f"{len(login_get.text):,} bytes"
-        )
+        print(f"[vhg-scrape] GET wp-login.php: {login_get.status_code}, {len(login_get.text):,} bytes")
         if login_get.status_code >= 400:
             raise VHGScrapeError(
                 f"GET wp-login.php returned {login_get.status_code}. "
@@ -217,10 +209,10 @@ def fetch_html(
             )
 
         # WordPress requires the test cookie to be set before login POST.
-        client.cookies.set("wordpress_test_cookie", "WP Cookie check", domain="vhg.app")
+        s.cookies.set("wordpress_test_cookie", "WP Cookie check", domain="vhg.app")
 
-        # Step 3: POST credentials, now with full browser-flavored headers.
-        r = client.post(
+        # Step 3: POST credentials with browser-flavored headers.
+        r = s.post(
             LOGIN_URL,
             data={
                 "log": email,
@@ -237,16 +229,18 @@ def fetch_html(
                 "Sec-Fetch-Mode": "navigate",
                 "Sec-Fetch-User": "?1",
             },
+            timeout=30,
         )
         if r.status_code >= 400:
             raise VHGScrapeError(f"Login HTTP {r.status_code} — body: {r.text[:300]!r}")
-        if not any(name.startswith("wordpress_logged_in") for name in client.cookies.keys()):
+        if not any(name.startswith("wordpress_logged_in") for name in s.cookies.keys()):
             raise VHGScrapeError(
                 "Login did not produce a logged_in cookie — wrong credentials, "
                 "or vhg.app changed its WP login flow"
             )
 
-        r = client.post(
+        # Step 4: trading_reporting AJAX call.
+        r = s.post(
             AJAX_URL,
             data={
                 "action": "trading_reporting",
@@ -254,9 +248,16 @@ def fetch_html(
                 "accnum": accnum,
                 "userid": userid,
             },
+            headers={
+                "Referer": "https://vhg.app/",
+                "Origin": "https://vhg.app",
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            timeout=30,
         )
         if r.status_code >= 400:
-            raise VHGScrapeError(f"trading_reporting HTTP {r.status_code}")
+            raise VHGScrapeError(f"trading_reporting HTTP {r.status_code} — body: {r.text[:300]!r}")
         return r.text
 
 
