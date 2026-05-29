@@ -400,21 +400,36 @@ def snapshot(
     total_year_nyse = len(trading_days_between(year_start_calendar, year_end_calendar))
     nyse_remaining_year = len(trading_days_between(as_of + timedelta(days=1), year_end_calendar))
 
-    # Compound $ projection — keep using forecast_year_end (monthly-fee model).
-    forecast = forecast_year_end(
-        states, as_of, commission_rate, rate_override=year_avg_gross_rate
-    )
-    projected_remainder_net = forecast.projected_closing_balance - latest.closing_balance
-    if projected_remainder_net > 0:
-        projected_remainder_gross = projected_remainder_net / (Decimal("1") - commission_rate)
-    else:
-        projected_remainder_gross = projected_remainder_net
-    year_proj_gross = ytd_gross + projected_remainder_gross
-    year_proj_net = ytd_net + projected_remainder_net
-
     # SIMPLE projected % (bar display): avg_daily × total_trading_days
     year_simple_proj_gross_pct = year_avg_gross_rate * Decimal(total_year_nyse)
     year_simple_proj_net_pct = year_avg_net_rate * Decimal(total_year_nyse)
+
+    # Active rate: how often the user actually traded NYSE sessions historically.
+    # Used for both the Yearly tile and the Annual Projection tile so they
+    # agree on the projection methodology when no plans are active.
+    hist_nyse_total = len(trading_days_between(min(s.date for s in states), as_of))
+    active_count_total = sum(1 for s in states if s.gross_pl != 0)
+    active_rate_for_proj = (
+        Decimal(active_count_total) / Decimal(hist_nyse_total)
+        if hist_nyse_total > 0
+        else Decimal("1")
+    )
+
+    # Yearly tile $ projection: project_year_with_plans with NO plans. This
+    # is the "what the strategy would produce if I made no further capital
+    # moves" number. The Annual Projection tile uses the same function with
+    # the user's actual planned changes — so when no plans are active, the
+    # two tiles show identical $ amounts.
+    yearly_proj = project_year_with_plans(
+        current_balance=latest.closing_balance,
+        as_of=as_of,
+        commission_rate=commission_rate,
+        daily_rate=year_avg_gross_rate,
+        active_rate=active_rate_for_proj,
+        planned_changes=[],
+    )
+    year_proj_gross = ytd_gross + yearly_proj.projected_gross_pl
+    year_proj_net = ytd_net + yearly_proj.projected_net_pl
 
     year_tile = YearTile(
         year=as_of.year,
@@ -430,7 +445,7 @@ def snapshot(
         projected_net_pl=year_proj_net,
         projected_gross_pct=year_simple_proj_gross_pct,
         projected_net_pct=year_simple_proj_net_pct,
-        projected_year_end_balance=forecast.projected_closing_balance,
+        projected_year_end_balance=yearly_proj.projected_balance,
     )
 
     # ---- annual projection (incorporates planned future capital changes) ----
@@ -450,15 +465,6 @@ def snapshot(
         )
         for r in planned_rows
     ]
-
-    # Active rate: how often the user actually traded NYSE sessions historically.
-    hist_nyse_total = len(trading_days_between(min(s.date for s in states), as_of))
-    active_count_total = sum(1 for s in states if s.gross_pl != 0)
-    active_rate_for_proj = (
-        Decimal(active_count_total) / Decimal(hist_nyse_total)
-        if hist_nyse_total > 0
-        else Decimal("1")
-    )
 
     annual_proj = project_year_with_plans(
         current_balance=latest.closing_balance,
