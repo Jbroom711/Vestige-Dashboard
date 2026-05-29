@@ -58,9 +58,13 @@ def main() -> int:
     # Path 1 (preferred from a hosted IP): Playwright drives a real browser
     # so it can solve Cloudflare and acquire its own cf_clearance cookie.
     if email and password and _PLAYWRIGHT_AVAILABLE:
-        print(f"[vhg-refresh] auth mode = Playwright browser ({email})")
+        proxy_url = os.environ.get("PROXY_URL")
+        proxy_note = " (via residential proxy)" if proxy_url else ""
+        print(f"[vhg-refresh] auth mode = Playwright browser ({email}){proxy_note}")
         try:
-            html = fetch_html_via_browser(email, password, accnum, userid)
+            html = fetch_html_via_browser(
+                email, password, accnum, userid, proxy_url=proxy_url
+            )
         except VHGScrapeError as e:
             print(f"[vhg-refresh] Playwright fetch failed: {e}", file=sys.stderr)
             return 2

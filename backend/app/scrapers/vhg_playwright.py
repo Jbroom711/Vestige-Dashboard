@@ -48,12 +48,18 @@ def fetch_html_via_browser(
     *,
     headless: bool = True,
     cf_settle_ms: int = 4000,
+    proxy_url: str | None = None,
 ) -> str:
     """Return the trading_reporting HTML payload, scraped via a real browser.
+
+    `proxy_url`, when provided, routes all browser traffic through a residential
+    proxy so Cloudflare sees a real-ISP IP instead of the Railway/cloud range.
+    Accepts the standard `http://user:pass@host:port` form.
 
     Raises VHGScrapeError on login failure or Cloudflare challenge that
     Playwright can't auto-solve.
     """
+    proxy_config = _parse_proxy(proxy_url)
     with sync_playwright() as pw:
         browser = pw.chromium.launch(
             headless=headless,
@@ -62,6 +68,7 @@ def fetch_html_via_browser(
                 "--disable-blink-features=AutomationControlled",
                 "--disable-dev-shm-usage",
             ],
+            proxy=proxy_config,
         )
         context = browser.new_context(
             user_agent=_USER_AGENT,
@@ -135,6 +142,26 @@ def fetch_html_via_browser(
         finally:
             context.close()
             browser.close()
+
+
+def _parse_proxy(url: str | None) -> dict[str, str] | None:
+    """Translate `http://user:pass@host:port` into Playwright's proxy dict."""
+    if not url:
+        return None
+    from urllib.parse import urlparse
+
+    p = urlparse(url)
+    if not p.hostname:
+        return None
+    server = f"{p.scheme or 'http'}://{p.hostname}"
+    if p.port:
+        server = f"{server}:{p.port}"
+    cfg: dict[str, str] = {"server": server}
+    if p.username:
+        cfg["username"] = p.username
+    if p.password:
+        cfg["password"] = p.password
+    return cfg
 
 
 def _wait_for_settle(page: Page) -> None:
