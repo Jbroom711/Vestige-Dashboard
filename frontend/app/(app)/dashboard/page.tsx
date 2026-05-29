@@ -7,7 +7,7 @@ import MonthlyBarTile from "@/components/dashboard/MonthlyBarTile";
 import ScraperStatusLine from "@/components/dashboard/ScraperStatusLine";
 import YearlyBarTile from "@/components/dashboard/YearlyBarTile";
 import { ApiError, apiServer } from "@/lib/api.server";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatSignedPercent } from "@/lib/format";
 import type { DashboardSnapshot } from "@/lib/types";
 
 export default async function DashboardPage() {
@@ -27,11 +27,23 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <header className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
         <h1 className="hidden text-2xl font-semibold tracking-tight sm:block">Dashboard</h1>
-        <div className="flex flex-col sm:ml-auto sm:items-end">
-          <p className="text-sm font-medium tabular-nums sm:text-base">
-            Balance: <span className="font-semibold">{formatMoney(snapshot.currentBalance)}</span>
-            {", "}YTD Net: <span className="font-semibold">{formatMoney(snapshot.year.netPl)}</span>
-          </p>
+        <div className="flex flex-col gap-0.5 sm:ml-auto sm:items-end sm:gap-0">
+          {/* Top metric line — split LEFT/RIGHT on mobile, packed on the right on desktop */}
+          <div className="flex w-full items-baseline justify-between gap-3 sm:w-auto sm:justify-end">
+            <p className="text-sm tabular-nums sm:text-base">
+              <span className="font-normal text-zinc-500">Balance </span>
+              <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                {formatMoney(snapshot.currentBalance)}
+              </span>
+            </p>
+            <p className="text-sm tabular-nums sm:text-base">
+              <span className="font-normal text-zinc-500">Net YTD </span>
+              <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                {formatMoney(snapshot.year.netPl)},{" "}
+                {formatSignedPercent(snapshot.year.netPct, 1)}
+              </span>
+            </p>
+          </div>
           <ScraperStatusLine />
         </div>
       </header>

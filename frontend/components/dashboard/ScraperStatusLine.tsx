@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 interface ScraperStatus {
   lastDataDate: string | null;
@@ -21,6 +22,7 @@ interface ScraperStatus {
 export default function ScraperStatusLine() {
   const [status, setStatus] = useState<ScraperStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     let mounted = true;
@@ -39,6 +41,24 @@ export default function ScraperStatusLine() {
 
   if (error || !status) return null;
 
+  // Mobile rendering: terser format, lighter grey than the top-row labels.
+  if (isMobile) {
+    const parts: string[] = [];
+    if (status.lastDataDate) {
+      const [y, m, d] = status.lastDataDate.split("-");
+      parts.push(`Data updated ${m}/${d}/${y}`);
+    }
+    if (status.cookieAgeDays !== null) {
+      parts.push(`Cookie age: ${status.cookieAgeDays}d`);
+    }
+    if (parts.length === 0) return null;
+    const tone = status.isStale
+      ? "text-amber-600 dark:text-amber-400"
+      : "text-zinc-400 dark:text-zinc-500";
+    return <p className={`text-xs ${tone}`}>{parts.join(". ")}.</p>;
+  }
+
+  // Desktop rendering: the richer "(current)" / "(N business days ago)" form.
   const pieces: string[] = [];
   if (status.lastDataDate) {
     const ageLabel =
