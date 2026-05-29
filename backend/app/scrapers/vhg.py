@@ -271,10 +271,34 @@ def parse_html(html: str) -> list[VHGRow]:
     balance = _find_named_array(html, "BALANCE")
     gross = _find_named_array(html, "GROSS PROFIT")
 
+    # vhg.app's Chart.js config sometimes pairs each label with multiple
+    # data points (e.g. open/close or stacked datasets). When data arrays
+    # are an integer multiple of labels, take a stride that preserves
+    # day-to-day alignment. Otherwise truncate to match.
+    if len(balance) == 2 * len(labels):
+        # Daily charts often emit [point, point, point, point, ...] where
+        # adjacent pairs are the same day. Take every other entry, starting
+        # from the second (which is typically the closing value).
+        balance = balance[1::2]
+        print(f"[vhg-parse] balance had 2x labels; took every other (closing values), now {len(balance)}")
+    elif len(balance) > len(labels):
+        balance = balance[: len(labels)]
+        print(f"[vhg-parse] balance longer than labels; truncated to first {len(labels)}")
+
+    if len(gross) == 2 * len(labels):
+        gross = gross[1::2]
+        print(f"[vhg-parse] gross had 2x labels; took every other (closing values), now {len(gross)}")
+    elif len(gross) > len(labels):
+        gross = gross[: len(labels)]
+        print(f"[vhg-parse] gross longer than labels; truncated to first {len(labels)}")
+
     if not (len(labels) == len(balance) == len(gross)):
         raise VHGScrapeError(
-            f"Array length mismatch: labels={len(labels)} "
-            f"balance={len(balance)} gross={len(gross)}"
+            f"Array length mismatch after normalization: labels={len(labels)} "
+            f"balance={len(balance)} gross={len(gross)}. "
+            f"First label: {labels[0] if labels else None!r}, "
+            f"first balance: {balance[0] if balance else None!r}, "
+            f"first gross: {gross[0] if gross else None!r}"
         )
 
     rows: list[VHGRow] = []
