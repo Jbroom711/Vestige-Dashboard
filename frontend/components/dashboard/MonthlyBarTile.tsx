@@ -27,8 +27,13 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
       </header>
 
       <div className="mt-auto flex items-end justify-start gap-[11px] sm:justify-center">
-        {/* --- The projection bar (no header, just the bar) --- */}
-        <div className="relative shrink-0" style={{ height: BAR_HEIGHT_PX, width: 120 }}>
+        {/* --- The projection bar (no header, just the bar) ---
+            ml-4 on mobile pushes this bar right by 16px so it lines up
+            horizontally with Daily's main bar (which sits 16px in from the
+            tile-inner left due to the narrow avg side-bar + 4px gap) and
+            with Yearly's centered main bar. On desktop the row is centered
+            so no offset is needed. */}
+        <div className="relative ml-4 shrink-0 sm:ml-0" style={{ height: BAR_HEIGHT_PX, width: 120 }}>
           <div
             className="absolute bottom-0 left-0 flex w-full flex-col overflow-hidden rounded-lg shadow-inner"
             style={{ height: BAR_HEIGHT_PX }}
