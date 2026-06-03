@@ -251,7 +251,9 @@ def snapshot(
     # ---- month tile ------------------------------------------------------
     month_start = date(as_of.year, as_of.month, 1)
     states_before_month = [s for s in states if s.date < month_start]
-    mtd_states = [s for s in states if s.date >= month_start]
+    # Cap at as_of so past-month views (?as_of=YYYY-MM-{last_day}) don't
+    # accidentally include subsequent months' states in the MTD totals.
+    mtd_states = [s for s in states if month_start <= s.date <= as_of]
     mtd_gross = sum((s.gross_pl for s in mtd_states), ZERO)
 
     prior_fee_results = compute_monthly_fees(states_before_month, commission_rate)
