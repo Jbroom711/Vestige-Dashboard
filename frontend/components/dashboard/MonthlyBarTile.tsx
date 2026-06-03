@@ -1,56 +1,14 @@
-"use client";
-
-import { useState } from "react";
-
-import { api } from "@/lib/api";
 import { formatMoney, formatSignedPercent, monthName } from "@/lib/format";
-import type { DashboardSnapshot, MonthTile } from "@/lib/types";
+import type { MonthTile } from "@/lib/types";
 
 const BAR_HEIGHT_PX = 280;
 
 /**
  * Monthly tile. Bar = projected full-month gross. The right side is a single
- * narrow column with MTD ($) and Full Est. ($) stacked vertically.
- *
- * Includes a small ▾ next to the month name that opens a dropdown of all
- * previous months in the current year — clicking one re-fetches the
- * snapshot at that month's last day and swaps in its month tile. Current
- * month is the default; clicking it from the dropdown returns to it.
+ * narrow column with MTD ($) and Full Est. ($) stacked vertically, colored
+ * to match the header labels ("MTD" black/bold, "Full (E)" grey/bold).
  */
-export default function MonthlyBarTile({ data: initialData }: { data: MonthTile }) {
-  const [data, setData] = useState<MonthTile>(initialData);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth() + 1;
-  const viewingMonth = data.month;
-  const isViewingCurrent = viewingMonth === currentMonth && data.year === currentYear;
-
-  // Past months of the current year, plus the current month at the top of
-  // the list so the user can quickly return to "now."
-  const monthOptions: number[] = [currentMonth];
-  for (let m = 1; m < currentMonth; m += 1) monthOptions.push(m);
-
-  async function selectMonth(m: number) {
-    setOpen(false);
-    if (m === viewingMonth && data.year === currentYear) return;
-    setLoading(true);
-    setError(null);
-    try {
-      // Last day of selected month (Date(year, m, 0) gives day 0 of m+1 = last of m).
-      const lastDay = new Date(currentYear, m, 0).getDate();
-      const asOf = `${currentYear}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-      const snapshot = await api.get<DashboardSnapshot>("/dashboard/snapshot", { as_of: asOf });
-      setData(snapshot.month);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load month");
-    }
-    setLoading(false);
-  }
-
+export default function MonthlyBarTile({ data }: { data: MonthTile }) {
   const projGross = Number(data.projectedGrossPl);
   const projNet = Number(data.projectedNetPl);
   const projGrossPct = Number(data.projectedGrossPct);
@@ -60,50 +18,12 @@ export default function MonthlyBarTile({ data: initialData }: { data: MonthTile 
   return (
     <div className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <header className="mb-4 flex items-baseline justify-between gap-3">
-        <div className="relative flex items-baseline gap-1">
-          <h2 className="text-3xl font-bold text-zinc-800 dark:text-zinc-100">
-            {monthName(data.month)}
-          </h2>
-          {monthOptions.length > 1 && (
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
-              aria-label="Pick a different month"
-              className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-            >
-              ▾
-            </button>
-          )}
-          {open && (
-            <div className="absolute left-0 top-full z-20 mt-1 min-w-[120px] rounded-md border border-zinc-200 bg-white py-1 text-sm shadow-md dark:border-zinc-700 dark:bg-zinc-900">
-              {monthOptions.map((m) => {
-                const isSelected = m === viewingMonth;
-                const isCurrent = m === currentMonth;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => selectMonth(m)}
-                    className={`block w-full px-3 py-1 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
-                      isSelected ? "font-semibold text-zinc-900 dark:text-zinc-100" : "text-zinc-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    {monthName(m)}
-                    {isCurrent ? " (current)" : ""}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <h2 className="text-3xl font-bold text-zinc-800 dark:text-zinc-100">
+          {monthName(data.month)}
+        </h2>
         <p className="text-sm text-zinc-500">
-          {loading
-            ? "loading…"
-            : error
-              ? error
-              : isViewingCurrent
-                ? `${data.totalTradingDays - data.remainingTradingDays} of ${data.totalTradingDays} trading days`
-                : `${data.totalTradingDays} trading days`}
+          {
+            data.totalTradingDays - data.remainingTradingDays} of {data.totalTradingDays} trading days
         </p>
       </header>
 
