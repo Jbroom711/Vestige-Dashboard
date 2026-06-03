@@ -76,7 +76,7 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
   // Reserve less right margin on mobile (just enough to fit "$X,XXX"), no
   // "Avg" suffix on each line; render a single "Avg" column header instead.
   const rightMargin = isMobile ? 70 : 140;
-  const leftMargin = isMobile ? 0 : 12;
+  const leftMargin = 0;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-2">
@@ -103,7 +103,7 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
               interval={0}
               tickFormatter={isMobile ? (d: string) => String(Number(d)) : undefined}
             />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatMoney(v)} width={80} />
+            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatMoney(v)} width={50} />
             <Tooltip content={<OrderedTooltip titlePrefix={`${monthFullName} `} useDayNum />} />
             <Legend wrapperStyle={{ fontSize: 12 }} content={() => <OrderedLegend />} />
             <ReferenceLine y={0} stroke="#9ca3af" />

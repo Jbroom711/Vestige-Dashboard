@@ -263,6 +263,32 @@ def snapshot(
         accrued_fee = (mtd_gross - offset) * commission_rate
     else:
         accrued_fee = ZERO
+
+    # If viewing a fully-elapsed past month (via ?as_of=...), prefer the
+    # effective fee from monthly_fees (manual override or auto stored value)
+    # over the running auto-accrual above. That matches what the dashboard's
+    # YTD net uses for the same month and keeps MTD-vs-E columns honest.
+    today_real = date.today()
+    is_past_month = (as_of.year, as_of.month) < (today_real.year, today_real.month)
+    if is_past_month:
+        past_fee = (
+            service_client()
+            .table("monthly_fees")
+            .select("auto_amount, manual_amount")
+            .eq("user_id", user.id)
+            .eq("year", as_of.year)
+            .eq("month", as_of.month)
+            .limit(1)
+            .execute()
+        ).data
+        if past_fee:
+            r = past_fee[0]
+            accrued_fee = (
+                Decimal(str(r["manual_amount"]))
+                if r["manual_amount"] is not None
+                else Decimal(str(r["auto_amount"]))
+            )
+
     mtd_net = mtd_gross - accrued_fee
 
     balance_at_month_start = (
@@ -302,14 +328,20 @@ def snapshot(
     else:
         proj_remainder_gross = ZERO
     month_proj_gross = mtd_gross + proj_remainder_gross
-    if month_proj_gross > 0:
-        month_proj_net = month_proj_gross * (Decimal("1") - commission_rate)
+    if is_past_month:
+        # Past month: projection equals actual. MTD and E columns match,
+        # and the bar % reflects the realized month return.
+        month_proj_net = mtd_net
+        month_simple_proj_gross_pct = _safe_pct(mtd_gross, balance_at_month_start)
+        month_simple_proj_net_pct = _safe_pct(mtd_net, balance_at_month_start)
     else:
-        month_proj_net = month_proj_gross
-
-    # SIMPLE projected % (what shows inside the bar): avg_daily × total_days
-    month_simple_proj_gross_pct = month_avg_gross_rate * Decimal(total_month_nyse)
-    month_simple_proj_net_pct = month_avg_net_rate * Decimal(total_month_nyse)
+        if month_proj_gross > 0:
+            month_proj_net = month_proj_gross * (Decimal("1") - commission_rate)
+        else:
+            month_proj_net = month_proj_gross
+        # SIMPLE projected % (bar display): avg_daily × total_trading_days
+        month_simple_proj_gross_pct = month_avg_gross_rate * Decimal(total_month_nyse)
+        month_simple_proj_net_pct = month_avg_net_rate * Decimal(total_month_nyse)
 
     month_tile = MonthTile(
         year=as_of.year,
