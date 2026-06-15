@@ -38,6 +38,7 @@ from app.scrapers.vhg import (  # noqa: E402
     fetch_html_with_cookie,
     parse_html,
 )
+from app.state import recompute_user_fees  # noqa: E402
 
 try:
     from app.scrapers.vhg_playwright import fetch_html_via_browser  # noqa: E402
@@ -207,6 +208,38 @@ def main() -> int:
         )
 
     print(f"[vhg-refresh] done. inserted={inserted}, skipped={skipped}")
+
+    # --- Monthly fees: auto-rollover for every approved user ----------------
+    # After daily_returns is up to date, regenerate the auto/carryforward
+    # columns of monthly_fees for every approved profile. The helper is
+    # idempotent and never overwrites manual_amount / manual_deducted_on,
+    # so the Jan 2026 Dec-roll-in override and any future broker-truth
+    # corrections survive. A failure here doesn't unwind the day's
+    # daily_returns insert; we just log and continue.
+    try:
+        approved = (
+            sb.table("profiles")
+            .select("id, email")
+            .eq("status", "approved")
+            .execute()
+            .data
+        ) or []
+        for p in approved:
+            try:
+                summary = recompute_user_fees(p["id"])
+                print(
+                    f"[vhg-refresh] fees recomputed for {p['email']}: "
+                    f"written={summary.get('computed', 0)}, "
+                    f"carry={summary.get('carryforward_remaining', '0')}"
+                )
+            except Exception as e:  # noqa: BLE001 — log + continue
+                print(
+                    f"[vhg-refresh] fee recompute failed for {p['email']}: {e}",
+                    file=sys.stderr,
+                )
+    except Exception as e:  # noqa: BLE001
+        print(f"[vhg-refresh] fee recompute step failed: {e}", file=sys.stderr)
+
     return 0
 
 

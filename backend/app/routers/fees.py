@@ -2,33 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date
-from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth import CurrentUser, require_approved
-from app.calc import compute_monthly_fees
-from app.db import service_client, user_client
+from app.db import user_client
 from app.schemas import MonthlyFeeOut, MonthlyFeeOverride
-from app.state import evolve_user_balance
+from app.state import recompute_user_fees
 
 router = APIRouter(prefix="/fees", tags=["fees"])
-
-
-def _commission_rate(user_id: str) -> Decimal:
-    p = (
-        service_client()
-        .table("profiles")
-        .select("commission_rate")
-        .eq("id", user_id)
-        .single()
-        .execute()
-    ).data
-    if not p:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile not found")
-    return Decimal(str(p["commission_rate"]))
 
 
 @router.get("", response_model=list[MonthlyFeeOut])
@@ -98,41 +81,4 @@ def recompute_fees(
     months from join_date forward. Manual override fields are left intact
     (the upsert only touches the auto/carryforward columns).
     """
-    commission_rate = _commission_rate(user.id)
-    states = evolve_user_balance(user.id)
-    results = compute_monthly_fees(states, commission_rate)
-
-    if not results:
-        return {"computed": 0, "carryforward_remaining": "0"}
-
-    today = date.today()
-    current_ym = (today.year, today.month)
-    sb = service_client()
-    written = 0
-    for r in results:
-        if (r.year, r.month) == current_ym:
-            # Current month is still accruing — don't materialize a fee row yet.
-            # The dashboard's mtd_accrued_fee shows the running estimate.
-            continue
-        payload = {
-            "user_id": user.id,
-            "year": r.year,
-            "month": r.month,
-            "auto_amount": str(r.auto_amount),
-            "auto_deducted_on": r.auto_deducted_on.isoformat(),
-            "carryforward_used": str(r.carryforward_used),
-            "carryforward_remaining": str(r.carryforward_remaining),
-        }
-        sb.table("monthly_fees").upsert(payload, on_conflict="user_id,year,month").execute()
-        written += 1
-
-    # If a stale current-month row exists (e.g. from a prior recompute that
-    # ran in a different month), clean it up so we don't double-deduct later.
-    sb.table("monthly_fees").delete().eq("user_id", user.id).eq(
-        "year", today.year
-    ).eq("month", today.month).execute()
-
-    return {
-        "computed": written,
-        "carryforward_remaining": str(results[-1].carryforward_remaining),
-    }
+    return recompute_user_fees(user.id)
