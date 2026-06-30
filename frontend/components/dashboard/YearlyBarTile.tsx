@@ -38,7 +38,7 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
                   <span className="text-[11px] font-medium uppercase tracking-wide text-[#666666]">
                     Gross
                   </span>
-                  <span className="text-3xl font-bold tabular-nums text-[#666666]">
+                  <span className="text-[28px] font-bold tabular-nums text-[#666666]">
                     {formatSignedPercent(projGrossPct, 1)}
                   </span>
                 </div>
@@ -46,7 +46,7 @@ export default function YearlyBarTile({ data }: { data: YearTile }) {
                   <span className="text-[11px] font-medium uppercase tracking-wide text-white/80">
                     Net
                   </span>
-                  <span className="text-3xl font-bold tabular-nums text-white">
+                  <span className="text-[28px] font-bold tabular-nums text-white">
                     {formatSignedPercent(projNetPct, 1)}
                   </span>
                 </div>
@@ -107,7 +107,7 @@ function DollarPair({
 }) {
   const color =
     tone === "gross"
-      ? "text-[#999999]"
+      ? "text-[#666666]"
       : "text-[#015c40]";
   return (
     <div
@@ -119,7 +119,7 @@ function DollarPair({
       <span className="invisible text-[11px] font-medium uppercase tracking-wide">
         .
       </span>
-      <span className={`whitespace-nowrap text-3xl font-bold tabular-nums ${color}`}>
+      <span className={`whitespace-nowrap text-[28px] font-bold tabular-nums ${color}`}>
         {formatMoney(full)} <span className="text-xl font-bold">E</span>
       </span>
       <span className={`mt-1 text-base font-normal tabular-nums ${color}`}>

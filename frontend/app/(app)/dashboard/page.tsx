@@ -59,11 +59,7 @@ export default async function DashboardPage() {
           Daily and Monthly are sized to their content (no trailing whitespace);
           Yearly takes the remaining width so the row fills the page column. */}
       <div className="grid gap-4 lg:grid-cols-[auto_auto_1fr]">
-        <DailyBarTile
-          data={snapshot.yesterday}
-          avgGross={snapshot.allTimeAvgGrossPl}
-          avgNet={snapshot.allTimeAvgNetPl}
-        />
+        <DailyBarTile data={snapshot.yesterday} />
         <MonthlyBarTile data={snapshot.month} />
         <YearlyBarTile data={snapshot.year} />
       </div>
