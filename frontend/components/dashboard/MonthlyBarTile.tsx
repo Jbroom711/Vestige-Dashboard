@@ -34,7 +34,7 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
             tile-inner left due to the narrow avg side-bar + 4px gap) and
             with Yearly's centered main bar. On desktop the row is centered
             so no offset is needed. */}
-        <div className="relative ml-4 shrink-0 sm:ml-0" style={{ height: BAR_HEIGHT_PX, width: 120 }}>
+        <div className="relative ml-4 shrink-0 sm:ml-0" style={{ height: BAR_HEIGHT_PX, width: 130 }}>
           <div
             className="absolute bottom-0 left-0 flex w-full flex-col overflow-hidden rounded-lg shadow-inner"
             style={{ height: BAR_HEIGHT_PX }}
