@@ -124,22 +124,37 @@ export default function BalanceLineChart({ series, capitalChanges, currentYear }
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
+    // Layout strategy depends on screen width.
+    //
+    // Desktop: fan labels horizontally so they don't pile up vertically:
+    //   - Deposits  → above the line, fanning LEFT (oldest farthest left)
+    //   - Withdrawals → below the line, fanning RIGHT (oldest closest)
+    //
+    // Mobile: horizontal fanning pushes oldest labels off the chart's left
+    // edge (the chart is only ~300-400 px wide). Instead, stack labels
+    // vertically directly above/below their own data point — each label
+    // gets its own vertical slot, with the newest closest to the line and
+    // older ones further out. Leader lines connect each label to its data
+    // point, so date proximity isn't a problem.
     const depositCount = baseAnnotations.filter((a) => a.type === "addition").length;
+    const withdrawalCount = baseAnnotations.filter((a) => a.type === "withdrawal").length;
     let depositIndex = 0;
     let withdrawalIndex = 0;
     const ccAnnotations = baseAnnotations.map((ann) => {
       if (ann.type === "addition") {
-        const offset = -(depositCount - depositIndex) * 50;
+        const horizontalOffset = isMobile ? 0 : -(depositCount - depositIndex) * 50;
+        const verticalStackIndex = depositCount - depositIndex; // oldest = highest
         depositIndex += 1;
-        return { ...ann, horizontalOffset: offset, above: true };
+        return { ...ann, horizontalOffset, above: true, verticalStackIndex };
       }
-      const offset = (withdrawalIndex + 1) * 50;
+      const horizontalOffset = isMobile ? 0 : (withdrawalIndex + 1) * 50;
+      const verticalStackIndex = withdrawalCount - withdrawalIndex; // oldest = lowest
       withdrawalIndex += 1;
-      return { ...ann, horizontalOffset: offset, above: false };
+      return { ...ann, horizontalOffset, above: false, verticalStackIndex };
     });
 
     return { data, ticks, useQuarterly, ccAnnotations };
-  }, [series, capitalChanges, view, currentYear]);
+  }, [series, capitalChanges, view, currentYear, isMobile]);
 
   const tickFormatter = (d: string) => {
     if (useQuarterly) {
@@ -188,7 +203,7 @@ export default function BalanceLineChart({ series, capitalChanges, currentYear }
               dot={false}
               strokeWidth={2}
             />
-            <CapitalChangesLayer annotations={ccAnnotations} />
+            <CapitalChangesLayer annotations={ccAnnotations} isMobile={isMobile} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -223,6 +238,7 @@ function ViewToggle({ value, onChange }: { value: View; onChange: (v: View) => v
  */
 function CapitalChangesLayer({
   annotations,
+  isMobile,
 }: {
   annotations: {
     date: string;
@@ -233,7 +249,9 @@ function CapitalChangesLayer({
     prevBalance: number | undefined;
     horizontalOffset: number;
     above: boolean;
+    verticalStackIndex: number;
   }[];
+  isMobile: boolean;
 }) {
   const xScale = useXAxisScale();
   const yScale = useYAxisScale();
@@ -269,6 +287,8 @@ function CapitalChangesLayer({
             date={ann.date}
             above={ann.above}
             horizontalOffset={ann.horizontalOffset}
+            verticalStackIndex={ann.verticalStackIndex}
+            isMobile={isMobile}
           />
         );
       })}
@@ -284,6 +304,8 @@ function CapitalChangeAnnotation({
   date,
   above,
   horizontalOffset,
+  verticalStackIndex,
+  isMobile,
 }: {
   tx: number; // arrow target x — midpoint of the line jump
   ty: number; // arrow target y — midpoint of the line jump
@@ -292,10 +314,14 @@ function CapitalChangeAnnotation({
   date: string;
   above: boolean;
   horizontalOffset: number; // signed px; negative = left, positive = right
+  verticalStackIndex: number; // 1 = nearest to line, larger = further away
+  isMobile: boolean;
 }) {
-  // Vertical offset depends on above/below; horizontal offset is supplied so
-  // callers can fan multiple callouts away from each other.
-  const verticalOffset = above ? -28 : 28;
+  // Mobile: no horizontal fan; instead each label gets a vertical slot so
+  // multiple same-type callouts stack above/below the line. Desktop: original
+  // single-row layout with horizontal fanning.
+  const stackPx = isMobile ? (verticalStackIndex - 1) * 22 : 0;
+  const verticalOffset = above ? -28 - stackPx : 28 + stackPx;
   const textCx = tx + horizontalOffset;
   const textCy = ty + verticalOffset;
 
