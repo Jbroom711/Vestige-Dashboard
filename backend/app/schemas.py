@@ -196,6 +196,11 @@ class MonthTile(BaseModel):
     projected_net_pl: Decimal                 # full-month net $ (compound, after fee)
     projected_gross_pct: Decimal              # SIMPLE: avg_daily_gross × total_days
     projected_net_pct: Decimal                # SIMPLE: avg_daily_net × total_days
+    is_closed: bool = False                   # True when tile shows a fully-elapsed
+                                              # prior month (Day-1-of-new-month
+                                              # fallback). Frontend uses this to
+                                              # drop the "E" suffix + MTD line and
+                                              # label the top figure "Actual".
 
 
 class YearTile(BaseModel):

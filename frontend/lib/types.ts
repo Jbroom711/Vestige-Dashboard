@@ -117,6 +117,8 @@ export interface MonthTile {
   projectedNetPl: MoneyStr;
   projectedGrossPct: PctStr;  // simple: avg_daily_gross × total_days
   projectedNetPct: PctStr;    // simple: avg_daily_net × total_days
+  isClosed: boolean;          // true only on Day-1-of-new-month fallback:
+                              // tile shows the just-completed prior month.
 }
 
 export interface YearTile {

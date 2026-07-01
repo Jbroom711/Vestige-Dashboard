@@ -367,6 +367,7 @@ def snapshot(
     month_tile = MonthTile(
         year=month_as_of.year,
         month=month_as_of.month,
+        is_closed=(month_as_of != as_of),
         gross_pl=mtd_gross,
         gross_pct=_safe_pct(mtd_gross, balance_at_month_start),
         net_pl=mtd_net,

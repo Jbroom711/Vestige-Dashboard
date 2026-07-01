@@ -77,6 +77,7 @@ export default function MonthlyBarTile({ data }: { data: MonthTile }) {
           mtdNet={Number(data.netPl)}
           fullGross={projGross}
           fullNet={projNet}
+          isClosed={data.isClosed}
         />
       </div>
     </div>
@@ -88,16 +89,18 @@ function DollarColumn({
   mtdNet,
   fullGross,
   fullNet,
+  isClosed,
 }: {
   mtdGross: number;
   mtdNet: number;
   fullGross: number;
   fullNet: number;
+  isClosed: boolean;
 }) {
   return (
     <div className="flex flex-col" style={{ height: BAR_HEIGHT_PX }}>
-      <DollarPair flex={2} mtd={mtdGross} full={fullGross} tone="gross" />
-      <DollarPair flex={3} mtd={mtdNet} full={fullNet} tone="net" />
+      <DollarPair flex={2} mtd={mtdGross} full={fullGross} tone="gross" isClosed={isClosed} />
+      <DollarPair flex={3} mtd={mtdNet} full={fullNet} tone="net" isClosed={isClosed} />
     </div>
   );
 }
@@ -107,11 +110,13 @@ function DollarPair({
   mtd,
   full,
   tone,
+  isClosed,
 }: {
   flex: number;
   mtd: number;
   full: number;
   tone: "gross" | "net";
+  isClosed: boolean;
 }) {
   const color =
     tone === "gross"
@@ -123,16 +128,23 @@ function DollarPair({
       style={{ flex }}
     >
       {/* Invisible spacer mirrors the "Gross"/"Net" label inside the bar so the
-          E value's baseline aligns with the % amount's baseline. */}
+          top figure's baseline aligns with the in-bar % amount's baseline. */}
       <span className="invisible text-[11px] font-medium uppercase tracking-wide">
         .
       </span>
       <span className={`whitespace-nowrap text-[28px] font-bold tabular-nums ${color}`}>
-        {formatMoney(full)} <span className="text-xl font-bold">E</span>
+        {formatMoney(full)}
+        {!isClosed && <span className="text-xl font-bold"> E</span>}
       </span>
-      <span className={`mt-1 text-base font-normal tabular-nums ${color}`}>
-        {formatMoney(mtd)} <span className="text-sm font-normal">MTD</span>
-      </span>
+      {isClosed ? (
+        <span className={`mt-1 text-sm font-normal uppercase tracking-wide ${color}`}>
+          Actual
+        </span>
+      ) : (
+        <span className={`mt-1 text-base font-normal tabular-nums ${color}`}>
+          {formatMoney(mtd)} <span className="text-sm font-normal">MTD</span>
+        </span>
+      )}
     </div>
   );
 }
