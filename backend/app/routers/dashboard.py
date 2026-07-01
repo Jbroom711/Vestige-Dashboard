@@ -557,10 +557,13 @@ def snapshot(
     # Build a full skeleton of every trading day in the current month so the
     # chart's x-axis shows all 20-ish ticks. Elapsed days carry real data;
     # non-elapsed days carry zeros (rendered as no-bar but the tick remains).
+    # Uses month_as_of (computed above) so on the 1st of a new month the
+    # chart shows the just-closed month's full bar set — same fallback as
+    # the Month tile.
     state_by_date = {s.date: s for s in mtd_states}
-    last_dom = (date(as_of.year, as_of.month, 28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    last_dom = (date(month_as_of.year, month_as_of.month, 28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
     monthly_bars: list[DailyBarPoint] = []
-    cur = date(as_of.year, as_of.month, 1)
+    cur = date(month_as_of.year, month_as_of.month, 1)
     while cur <= last_dom:
         if is_trading_day(cur):
             if cur in state_by_date:
