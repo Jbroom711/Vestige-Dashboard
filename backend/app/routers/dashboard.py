@@ -259,11 +259,20 @@ def snapshot(
     )
 
     # ---- month tile ------------------------------------------------------
-    month_start = date(as_of.year, as_of.month, 1)
+    # When today's calendar month has no trading activity yet (e.g. it's the
+    # 1st of the month and this morning's cron hasn't run), fall back to the
+    # last month that DOES have trading — mirrors how the Daily tile shows
+    # yesterday's trading rather than today's zero-data day.
+    if latest.date.year != as_of.year or latest.date.month != as_of.month:
+        month_as_of = latest.date
+    else:
+        month_as_of = as_of
+
+    month_start = date(month_as_of.year, month_as_of.month, 1)
     states_before_month = [s for s in states if s.date < month_start]
-    # Cap at as_of so past-month views (?as_of=YYYY-MM-{last_day}) don't
+    # Cap at month_as_of so past-month views (?as_of=YYYY-MM-{last_day}) don't
     # accidentally include subsequent months' states in the MTD totals.
-    mtd_states = [s for s in states if month_start <= s.date <= as_of]
+    mtd_states = [s for s in states if month_start <= s.date <= month_as_of]
     mtd_gross = sum((s.gross_pl for s in mtd_states), ZERO)
 
     prior_fee_results = compute_monthly_fees(states_before_month, commission_rate)
@@ -281,15 +290,15 @@ def snapshot(
     # over the running auto-accrual above. That matches what the dashboard's
     # YTD net uses for the same month and keeps MTD-vs-E columns honest.
     today_real = date.today()
-    is_past_month = (as_of.year, as_of.month) < (today_real.year, today_real.month)
+    is_past_month = (month_as_of.year, month_as_of.month) < (today_real.year, today_real.month)
     if is_past_month:
         past_fee = (
             service_client()
             .table("monthly_fees")
             .select("auto_amount, manual_amount")
             .eq("user_id", user.id)
-            .eq("year", as_of.year)
-            .eq("month", as_of.month)
+            .eq("year", month_as_of.year)
+            .eq("month", month_as_of.month)
             .limit(1)
             .execute()
         ).data
@@ -324,13 +333,13 @@ def snapshot(
         month_avg_net_rate = ZERO
 
     # Trading-day counts (NYSE, no active-rate adjustment now).
-    if as_of.month == 12:
-        month_last_day = date(as_of.year, 12, 31)
+    if month_as_of.month == 12:
+        month_last_day = date(month_as_of.year, 12, 31)
     else:
-        month_last_day = date(as_of.year, as_of.month + 1, 1) - timedelta(days=1)
-    month_first_day = date(as_of.year, as_of.month, 1)
+        month_last_day = date(month_as_of.year, month_as_of.month + 1, 1) - timedelta(days=1)
+    month_first_day = date(month_as_of.year, month_as_of.month, 1)
     total_month_nyse = len(trading_days_between(month_first_day, month_last_day))
-    nyse_remaining_month = len(trading_days_between(as_of + timedelta(days=1), month_last_day))
+    nyse_remaining_month = len(trading_days_between(month_as_of + timedelta(days=1), month_last_day))
 
     # Compound $ projection: geo-rate compounded over remaining NYSE days,
     # then 40% fee on the resulting full month gross.
@@ -356,8 +365,8 @@ def snapshot(
         month_simple_proj_net_pct = month_avg_net_rate * Decimal(total_month_nyse)
 
     month_tile = MonthTile(
-        year=as_of.year,
-        month=as_of.month,
+        year=month_as_of.year,
+        month=month_as_of.month,
         gross_pl=mtd_gross,
         gross_pct=_safe_pct(mtd_gross, balance_at_month_start),
         net_pl=mtd_net,
