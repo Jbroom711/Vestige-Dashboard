@@ -43,38 +43,24 @@ export default function ScraperStatusLine() {
 
   // Mobile rendering: terser format, lighter grey than the top-row labels.
   if (isMobile) {
-    const parts: string[] = [];
-    if (status.lastDataDate) {
-      const [y, m, d] = status.lastDataDate.split("-");
-      parts.push(`Data updated ${m}/${d}/${y}`);
-    }
-    if (status.cookieAgeDays !== null) {
-      parts.push(`Cookie age: ${status.cookieAgeDays}d`);
-    }
-    if (parts.length === 0) return null;
+    if (!status.lastDataDate) return null;
+    const [y, m, d] = status.lastDataDate.split("-");
     const tone = status.isStale
       ? "text-amber-600 dark:text-amber-400"
       : "text-zinc-300 dark:text-zinc-600";
-    return <p className={`text-xs ${tone}`}>{parts.join(". ")}.</p>;
+    return <p className={`text-xs ${tone}`}>Data updated {m}/{d}/{y}.</p>;
   }
 
   // Desktop rendering: the richer "(current)" / "(N business days ago)" form.
-  const pieces: string[] = [];
-  if (status.lastDataDate) {
-    const ageLabel =
-      status.dataAgeBusinessDays === null
-        ? ""
-        : status.dataAgeBusinessDays === 0
-          ? " (current)"
-          : status.dataAgeBusinessDays === 1
-            ? " (1 business day ago)"
-            : ` (${status.dataAgeBusinessDays} business days ago)`;
-    pieces.push(`Data last updated ${status.lastDataDate}${ageLabel}`);
-  }
-  if (status.cookieAgeDays !== null) {
-    pieces.push(`cookie age: ${status.cookieAgeDays}d`);
-  }
-  if (pieces.length === 0) return null;
+  if (!status.lastDataDate) return null;
+  const ageLabel =
+    status.dataAgeBusinessDays === null
+      ? ""
+      : status.dataAgeBusinessDays === 0
+        ? " (current)"
+        : status.dataAgeBusinessDays === 1
+          ? " (1 business day ago)"
+          : ` (${status.dataAgeBusinessDays} business days ago)`;
 
   const tone = status.isStale
     ? "text-amber-700 dark:text-amber-400"
@@ -82,8 +68,7 @@ export default function ScraperStatusLine() {
 
   return (
     <p className={`text-xs ${tone}`}>
-      {pieces.join(" · ")}
-      {status.isStale && " · cookie may need refresh in Railway"}
+      Data last updated {status.lastDataDate}{ageLabel}
     </p>
   );
 }

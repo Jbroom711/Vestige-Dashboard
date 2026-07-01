@@ -84,9 +84,11 @@ def status(_: Annotated[CurrentUser, Depends(require_approved)]) -> dict[str, ob
                 cookie_set = None
     cookie_age = (today - cookie_set).days if cookie_set else None
 
-    is_stale = (data_age is not None and data_age >= 2) or (
-        cookie_age is not None and cookie_age >= 14
-    )
+    # Only data-age triggers the "stale" warning now. The cookie path is a
+    # legacy fallback we haven't used since 2026-05-30 (active auth is
+    # BrightData ISP proxy + credentials), so cookie age is not a real
+    # signal — using it caused false-alarm amber warnings.
+    is_stale = data_age is not None and data_age >= 2
 
     return {
         "last_data_date": last_data_date,
