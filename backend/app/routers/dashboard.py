@@ -215,7 +215,17 @@ def snapshot(
     cap_changes = _load_capital_changes(user.id)
 
     # ---- yesterday tile --------------------------------------------------
-    latest = states[-1]
+    # Pick the most recent state that reflects actual trading (non-zero
+    # gross_pl). evolve_balance creates fee-only states on fee-deduction
+    # dates (e.g. 2026-07-01 when June's fee is auto-deducted), and those
+    # states have gross_pl = 0. Showing them in the Daily tile is misleading
+    # — the tile is for "yesterday's trading performance," not for fee
+    # bookkeeping days. Fall back to states[-1] only if no state has any
+    # trading activity yet (very early in a fresh account's history).
+    latest = next(
+        (s for s in reversed(states) if s.gross_pl != ZERO),
+        states[-1],
+    )
     if latest.date == as_of:
         label = "Today"
     elif latest.date == prev_trading_day(as_of):
