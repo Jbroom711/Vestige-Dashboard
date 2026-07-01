@@ -51,7 +51,7 @@ export default function BalanceLineChart({ series, capitalChanges, currentYear }
     );
   }
 
-  const { data, ticks, useQuarterly, ccAnnotations } = useMemo(() => {
+  const { data, ticks, useQuarterly, ccAnnotations, filteredCC } = useMemo(() => {
     const yearStr = String(currentYear);
     // Filter series and capital changes by view.
     const filteredSeries =
@@ -94,12 +94,11 @@ export default function BalanceLineChart({ series, capitalChanges, currentYear }
     // Resolve each capital change to (date, balance-at-that-date) PLUS the
     // previous trading day's balance so we can point the arrow at the middle
     // of the vertical "jump" the deposit/withdrawal creates on the line.
-    // Then assign each annotation a horizontal offset based on its position
-    // within its type-group:
-    //   Deposits  → all rendered above the line, fanning LEFT
-    //               (first/oldest gets the largest -offset)
-    //   Withdrawals → all rendered below the line, fanning RIGHT
-    //               (first/oldest gets the smallest +offset)
+    // Horizontal-fan offsets are assigned by position within type-group:
+    //   Deposits  → above the line, fanning LEFT (oldest farthest)
+    //   Withdrawals → below the line, fanning RIGHT (newest farthest)
+    // (Only used on desktop. Mobile renders just a colored dot here and shows
+    // a labeled list below the chart.)
     const baseAnnotations = filteredCC
       .map((cc) => {
         const idx = data.findIndex((d) => d.date === cc.date);
@@ -124,37 +123,22 @@ export default function BalanceLineChart({ series, capitalChanges, currentYear }
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
-    // Layout strategy depends on screen width.
-    //
-    // Desktop: fan labels horizontally so they don't pile up vertically:
-    //   - Deposits  → above the line, fanning LEFT (oldest farthest left)
-    //   - Withdrawals → below the line, fanning RIGHT (oldest closest)
-    //
-    // Mobile: horizontal fanning pushes oldest labels off the chart's left
-    // edge (the chart is only ~300-400 px wide). Instead, stack labels
-    // vertically directly above/below their own data point — each label
-    // gets its own vertical slot, with the newest closest to the line and
-    // older ones further out. Leader lines connect each label to its data
-    // point, so date proximity isn't a problem.
     const depositCount = baseAnnotations.filter((a) => a.type === "addition").length;
-    const withdrawalCount = baseAnnotations.filter((a) => a.type === "withdrawal").length;
     let depositIndex = 0;
     let withdrawalIndex = 0;
     const ccAnnotations = baseAnnotations.map((ann) => {
       if (ann.type === "addition") {
-        const horizontalOffset = isMobile ? 0 : -(depositCount - depositIndex) * 50;
-        const verticalStackIndex = depositCount - depositIndex; // oldest = highest
+        const offset = -(depositCount - depositIndex) * 50;
         depositIndex += 1;
-        return { ...ann, horizontalOffset, above: true, verticalStackIndex };
+        return { ...ann, horizontalOffset: offset, above: true };
       }
-      const horizontalOffset = isMobile ? 0 : (withdrawalIndex + 1) * 50;
-      const verticalStackIndex = withdrawalCount - withdrawalIndex; // oldest = lowest
+      const offset = (withdrawalIndex + 1) * 50;
       withdrawalIndex += 1;
-      return { ...ann, horizontalOffset, above: false, verticalStackIndex };
+      return { ...ann, horizontalOffset: offset, above: false };
     });
 
-    return { data, ticks, useQuarterly, ccAnnotations };
-  }, [series, capitalChanges, view, currentYear, isMobile]);
+    return { data, ticks, useQuarterly, ccAnnotations, filteredCC };
+  }, [series, capitalChanges, view, currentYear]);
 
   const tickFormatter = (d: string) => {
     if (useQuarterly) {
@@ -207,6 +191,13 @@ export default function BalanceLineChart({ series, capitalChanges, currentYear }
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Mobile-only labelled list below the chart, since horizontal fanning
+          doesn't fit and on-chart labels would have to overlap. Desktop keeps
+          the in-chart labels. */}
+      {isMobile && filteredCC.length > 0 && (
+        <CapitalChangesList changes={filteredCC} />
+      )}
     </div>
   );
 }
@@ -228,13 +219,46 @@ function ViewToggle({ value, onChange }: { value: View; onChange: (v: View) => v
   );
 }
 
+function CapitalChangesList({ changes }: { changes: CapitalChangePoint[] }) {
+  // Newest first; matches how the user thinks about recency.
+  const sorted = [...changes].sort((a, b) => b.date.localeCompare(a.date));
+  return (
+    <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        Capital Changes
+      </h4>
+      <ul className="space-y-1">
+        {sorted.map((c) => {
+          const isAddition = c.type === "addition";
+          const signColor = isAddition
+            ? "text-emerald-700 dark:text-emerald-400"
+            : "text-red-700 dark:text-red-400";
+          const sign = isAddition ? "+" : "−";
+          return (
+            <li
+              key={`${c.date}-${c.type}-${c.amount}`}
+              className="flex items-center justify-between gap-3 text-sm tabular-nums"
+            >
+              <span className={`font-semibold ${signColor}`}>
+                {sign} {formatMoney(c.amount)}
+              </span>
+              <span className="text-zinc-500">{formatShortDate(c.date)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * Customized layer rendered outside the chart's plot-area clip path so the
  * labels are always visible, not clipped or hover-dependent.
  *
  * Uses the chart's xAxisMap / yAxisMap scales to convert each capital change
- * to pixel coordinates, then draws a dot, a short stem-and-arrow pointing at
- * the line, and a two-line label.
+ * to pixel coordinates, then either:
+ *  - Desktop: dot + leader-line + arrowhead + two-line label.
+ *  - Mobile: just a colored dot (labels live in the list below the chart).
  */
 function CapitalChangesLayer({
   annotations,
@@ -249,7 +273,6 @@ function CapitalChangesLayer({
     prevBalance: number | undefined;
     horizontalOffset: number;
     above: boolean;
-    verticalStackIndex: number;
   }[];
   isMobile: boolean;
 }) {
@@ -277,6 +300,20 @@ function CapitalChangesLayer({
             ty = (cyPre + cyPost) / 2;
           }
         }
+        if (isMobile) {
+          const fill = ann.type === "addition" ? "#015c40" : "#dc2626";
+          return (
+            <circle
+              key={`${ann.date}-${ann.type}-${i}`}
+              cx={tx}
+              cy={ty}
+              r={5}
+              fill={fill}
+              stroke="#ffffff"
+              strokeWidth={1.5}
+            />
+          );
+        }
         return (
           <CapitalChangeAnnotation
             key={`${ann.date}-${ann.type}-${i}`}
@@ -287,8 +324,6 @@ function CapitalChangesLayer({
             date={ann.date}
             above={ann.above}
             horizontalOffset={ann.horizontalOffset}
-            verticalStackIndex={ann.verticalStackIndex}
-            isMobile={isMobile}
           />
         );
       })}
@@ -304,8 +339,6 @@ function CapitalChangeAnnotation({
   date,
   above,
   horizontalOffset,
-  verticalStackIndex,
-  isMobile,
 }: {
   tx: number; // arrow target x — midpoint of the line jump
   ty: number; // arrow target y — midpoint of the line jump
@@ -314,14 +347,10 @@ function CapitalChangeAnnotation({
   date: string;
   above: boolean;
   horizontalOffset: number; // signed px; negative = left, positive = right
-  verticalStackIndex: number; // 1 = nearest to line, larger = further away
-  isMobile: boolean;
 }) {
-  // Mobile: no horizontal fan; instead each label gets a vertical slot so
-  // multiple same-type callouts stack above/below the line. Desktop: original
-  // single-row layout with horizontal fanning.
-  const stackPx = isMobile ? (verticalStackIndex - 1) * 22 : 0;
-  const verticalOffset = above ? -28 - stackPx : 28 + stackPx;
+  // Vertical offset depends on above/below; horizontal offset is supplied so
+  // callers can fan multiple callouts away from each other.
+  const verticalOffset = above ? -28 : 28;
   const textCx = tx + horizontalOffset;
   const textCy = ty + verticalOffset;
 
