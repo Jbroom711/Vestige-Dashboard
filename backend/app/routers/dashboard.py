@@ -259,11 +259,20 @@ def snapshot(
     )
 
     # ---- month tile ------------------------------------------------------
-    # When today's calendar month has no trading activity yet (e.g. it's the
-    # 1st of the month and this morning's cron hasn't run), fall back to the
-    # last month that DOES have trading — mirrors how the Daily tile shows
-    # yesterday's trading rather than today's zero-data day.
-    if latest.date.year != as_of.year or latest.date.month != as_of.month:
+    # Day-1-of-new-month fallback: when today's calendar month has no trading
+    # activity yet (e.g. 1st of the month before that morning's cron runs),
+    # fall back to the last month that DOES have trading — mirrors how the
+    # Daily tile shows yesterday's trading rather than today's zero-data day.
+    #
+    # Important: only apply the fallback for the "default view" (no explicit
+    # as_of). When the caller passes ?as_of=YYYY-MM-DD to view a specific
+    # past month (via the picker on the daily-performance chart), honor that
+    # month even if it differs from `latest.date`'s month.
+    today_real = date.today()
+    if (
+        as_of == today_real
+        and (latest.date.year != as_of.year or latest.date.month != as_of.month)
+    ):
         month_as_of = latest.date
     else:
         month_as_of = as_of
@@ -289,7 +298,6 @@ def snapshot(
     # effective fee from monthly_fees (manual override or auto stored value)
     # over the running auto-accrual above. That matches what the dashboard's
     # YTD net uses for the same month and keeps MTD-vs-E columns honest.
-    today_real = date.today()
     is_past_month = (month_as_of.year, month_as_of.month) < (today_real.year, today_real.month)
     if is_past_month:
         past_fee = (

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Bar,
   BarChart,
@@ -12,9 +13,10 @@ import {
   YAxis,
 } from "recharts";
 
+import { api } from "@/lib/api";
 import { formatMoney, formatSignedPercent, monthName } from "@/lib/format";
 import { useIsMobile } from "@/lib/useIsMobile";
-import type { DailyBarPoint } from "@/lib/types";
+import type { DailyBarPoint, DashboardSnapshot } from "@/lib/types";
 
 interface Props {
   bars: DailyBarPoint[];
@@ -34,7 +36,14 @@ interface Row {
   netPct: number;
 }
 
-export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
+export default function DailyBarsChart({ bars: initialBars, avgGrossPl: initialAvgGross, avgNetPl: initialAvgNet }: Props) {
+  const [bars, setBars] = useState<DailyBarPoint[]>(initialBars);
+  const [avgGrossPl, setAvgGrossPl] = useState<string>(initialAvgGross);
+  const [avgNetPl, setAvgNetPl] = useState<string>(initialAvgNet);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const isMobile = useIsMobile();
+
   if (bars.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
@@ -69,21 +78,85 @@ export default function DailyBarsChart({ bars, avgGrossPl, avgNetPl }: Props) {
   const avgGross = Number(avgGrossPl);
   const avgNet = Number(avgNetPl);
 
-  const [y, m] = bars[0].date.split("-").map(Number);
-  const monthFullName = monthName(m);
-  const title = `${monthFullName} ${y} Daily Performance`;
-  const isMobile = useIsMobile();
+  const [displayedYear, displayedMonth] = bars[0].date.split("-").map(Number);
+  const monthFullName = monthName(displayedMonth);
+  const title = `${monthFullName} ${displayedYear} Daily Performance`;
   // Reserve less right margin on mobile (just enough to fit "$X,XXX"), no
   // "Avg" suffix on each line; render a single "Avg" column header instead.
   const rightMargin = isMobile ? 70 : 140;
   const leftMargin = 0;
 
+  // Month picker — offer every month of the displayed year up to whichever
+  // is later: the currently-displayed month or today's month. That way both
+  // Day-1 fallback state ("June" displayed, "July" in reality) AND normal
+  // state ("July" both displayed and current) show a sensible list.
+  const nowY = new Date().getFullYear();
+  const nowM = new Date().getMonth() + 1;
+  const yearForOptions = displayedYear;
+  const upperMonth =
+    displayedYear === nowY ? Math.max(displayedMonth, nowM) : 12;
+  const monthOptions: number[] = [];
+  for (let mo = 1; mo <= upperMonth; mo += 1) monthOptions.push(mo);
+
+  async function selectMonth(mo: number) {
+    setPickerOpen(false);
+    if (mo === displayedMonth && yearForOptions === displayedYear) return;
+    setLoading(true);
+    try {
+      const lastDay = new Date(yearForOptions, mo, 0).getDate();
+      const asOf = `${yearForOptions}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const snap = await api.get<DashboardSnapshot>("/dashboard/snapshot", { as_of: asOf });
+      setBars(snap.monthlyBars);
+      setAvgGrossPl(snap.monthlyAvgGrossPl);
+      setAvgNetPl(snap.monthlyAvgNetPl);
+    } catch {
+      // silent; picker stays on the current view. Consider surfacing later.
+    }
+    setLoading(false);
+  }
+
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-2">
       <div className="relative mb-2 flex items-baseline justify-between">
-        <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-          {title}
-        </h3>
+        <div className="relative flex items-baseline gap-1">
+          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+            {title}
+          </h3>
+          {monthOptions.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setPickerOpen((v) => !v)}
+              aria-label="Pick a different month"
+              className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded text-xs text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              disabled={loading}
+            >
+              {loading ? "…" : "▾"}
+            </button>
+          )}
+          {pickerOpen && (
+            <div className="absolute left-0 top-full z-20 mt-1 min-w-[140px] rounded-md border border-zinc-200 bg-white py-1 text-sm shadow-md dark:border-zinc-700 dark:bg-zinc-900">
+              {monthOptions.map((mo) => {
+                const isSelected = mo === displayedMonth && yearForOptions === displayedYear;
+                const isCurrentReal = mo === nowM && yearForOptions === nowY;
+                return (
+                  <button
+                    key={mo}
+                    type="button"
+                    onClick={() => selectMonth(mo)}
+                    className={`block w-full px-3 py-1 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+                      isSelected
+                        ? "font-semibold text-zinc-900 dark:text-zinc-100"
+                        : "text-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    {monthName(mo)} {yearForOptions}
+                    {isCurrentReal ? " (current)" : ""}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
         {isMobile && (
           <span
             className="text-xs font-medium text-zinc-500"
