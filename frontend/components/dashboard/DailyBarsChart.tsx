@@ -118,7 +118,7 @@ export default function DailyBarsChart({ bars: initialBars, avgGrossPl: initialA
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-2">
       <div className="relative mb-2 flex items-baseline justify-between">
-        <div className="relative flex items-baseline gap-1">
+        <div className="relative flex items-center gap-0">
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
             {title}
           </h3>
@@ -127,7 +127,7 @@ export default function DailyBarsChart({ bars: initialBars, avgGrossPl: initialA
               type="button"
               onClick={() => setPickerOpen((v) => !v)}
               aria-label="Pick a different month"
-              className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              className="inline-flex h-7 w-7 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
               disabled={loading}
             >
               {loading ? (
