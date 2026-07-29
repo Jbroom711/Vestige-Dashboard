@@ -48,12 +48,20 @@ def _jwks_client() -> PyJWKClient:
     macOS Python distributions don't ship a CA bundle that urllib uses by
     default, so SSL verification fails. We pass an explicit SSL context
     backed by certifi's bundled CA list.
+
+    lifespan=3600 keeps the signing-key set cached for 1 hour, cutting the
+    Supabase JWKS fetch to at most once per hour per key. timeout=5 limits
+    each JWKS fetch to 5 seconds (rather than urllib's default which can
+    hang for many minutes) so a transient Railway→Supabase egress issue
+    fails fast and lets a retry take over.
     """
     settings = get_settings()
     ssl_context = ssl.create_default_context(cafile=certifi.where())
     return PyJWKClient(
         f"{settings.supabase_url}/auth/v1/.well-known/jwks.json",
         ssl_context=ssl_context,
+        lifespan=3600,
+        timeout=5,
     )
 
 
@@ -84,13 +92,24 @@ def _decode_token(token: str) -> dict:
                 audience="authenticated",
             )
         if alg in ("ES256", "RS256"):
+            # Retry once on JWKS fetch failure. First failure often cures
+            # itself on retry when the underlying issue is a wedged HTTP
+            # connection or transient network hiccup between Railway and
+            # Supabase (documented 2026-07-16 incident, JWKS timed out on
+            # every request until the backend was restarted).
             try:
                 signing_key = _jwks_client().get_signing_key_from_jwt(token)
-            except PyJWKClientError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"Could not resolve signing key from JWKS: {e}",
-                ) from e
+            except PyJWKClientError:
+                # Blow away the cached client (which also caches network
+                # state) and try one more time.
+                _jwks_client.cache_clear()
+                try:
+                    signing_key = _jwks_client().get_signing_key_from_jwt(token)
+                except PyJWKClientError as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail=f"Could not resolve signing key from JWKS: {e}",
+                    ) from e
             return jwt.decode(
                 token,
                 signing_key.key,
